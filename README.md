@@ -50,13 +50,13 @@ This repository blocks commits that do not follow the agreed structure.
 Format:
 
 ```text
-type(scope): A4-123 short description
+type(scope optional): short description
 ```
 
 Example:
 
 ```text
-feat(api): A4-21 add health endpoint
+fix: add githooks and branch protection
 ```
 
 Setup once after cloning:

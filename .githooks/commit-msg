@@ -9,16 +9,17 @@ if [[ "$first_line" == Merge* ]] || [[ "$first_line" == Revert\ \"* ]]; then
   exit 0
 fi
 
-pattern='^(feat|fix|refactor|chore|docs|test|ci|perf|revert)\([a-z0-9._/-]+\): A4-[0-9]+ .+'
+pattern='^(feat|fix|refactor|chore|docs|test|ci|perf|revert)(\([a-z0-9._/-]+\))?: .+'
 
 if [[ ! "$first_line" =~ $pattern ]]; then
   echo ""
   echo "ERROR: Invalid commit message format."
-  echo "Expected: type(scope): A4-123 short description"
+  echo "Expected: type(scope optional): short description"
   echo ""
   echo "Examples:"
-  echo "  feat(api): A4-21 add health endpoint"
-  echo "  fix(auth): A4-52 validate keycloak token audience"
+  echo "  fix: add githooks and branch protection"
+  echo "  feat(api): add health endpoint"
+  echo "  fix(auth): validate keycloak token audience"
   echo ""
   echo "Allowed types: feat|fix|refactor|chore|docs|test|ci|perf|revert"
   exit 1

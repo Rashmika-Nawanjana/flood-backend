@@ -35,7 +35,7 @@ protect_branch() {
 {
   "required_status_checks": {
     "strict": true,
-    "checks": []
+    "contexts": ["Commit Message Check"]
   },
   "enforce_admins": true,
   "required_pull_request_reviews": {

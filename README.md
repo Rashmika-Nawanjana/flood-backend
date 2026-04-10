@@ -59,21 +59,5 @@ Example:
 fix: add githooks and branch protection
 ```
 
-Setup once after cloning:
 
-```bash
-bash scripts/setup-git-hooks.sh
-```
 
-## Branch protection setup (GitHub)
-
-Apply protection for `main`, `stg`, and `dev` (PR required, admin enforcement, no force push):
-
-```bash
-bash scripts/apply-branch-protection.sh
-```
-
-Prerequisites:
-
-- Install GitHub CLI (`gh`)
-- Authenticate once with `gh auth login`

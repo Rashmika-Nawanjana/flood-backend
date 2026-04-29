@@ -31,6 +31,16 @@ docker run --rm -p 8000:8000 flood-api
 docker compose up --build
 ```
 
+## API Gateway (Kong)
+
+This repository now includes a Kong declarative configuration file at `kong.yml`.
+
+- External entry points:
+  - `/api/*` → backend `api` service
+  - `/auth/*` → auth service placeholder
+- Rate limiting is configured for `/api/*` with a local limit of 30 requests per minute.
+- `kong` is configured in DB-less mode and reads `kong.yml` at startup.
+
 ## Health check
 
 ```bash
@@ -40,7 +50,7 @@ curl http://localhost:8000/health
 Expected response:
 
 ```json
-{"status": "ok", "service": "flood-backend"}
+{ "status": "ok", "service": "flood-backend" }
 ```
 
 ## Enforced commit message format

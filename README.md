@@ -33,7 +33,10 @@ docker compose up --build
 
 ## API Gateway (Kong)
 
-This repository now includes a Kong declarative configuration file at `api-gateway-spec.yaml`.
+This repository now includes:
+
+- `api-gateway-spec.yaml` — Kong DB-less declarative config for local/container gateway deployment
+- `api-gateway-openapi.yaml` — OpenAPI file for upload to Kong Konnect or other API gateway control planes
 
 - External entry points:
   - `/api/*` → backend `api` service

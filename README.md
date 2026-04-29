@@ -33,13 +33,47 @@ docker compose up --build
 
 ## API Gateway (Kong)
 
-This repository now includes a Kong declarative configuration file at `kong.yml`.
+This repository now includes a Kong declarative configuration file at `api-gateway-spec.yaml`.
 
 - External entry points:
   - `/api/*` → backend `api` service
   - `/auth/*` → auth service placeholder
 - Rate limiting is configured for `/api/*` with a local limit of 30 requests per minute.
-- `kong` is configured in DB-less mode and reads `kong.yml` at startup.
+- `kong` is configured in DB-less mode and reads `api-gateway-spec.yaml` at startup.
+
+### Run Kong with the gateway spec
+
+For local development (existing compose):
+
+```bash
+docker compose up --build
+```
+
+For deployment with Kong as the gateway service:
+
+```bash
+docker compose -f docker-compose.deploy.yml up -d --build
+```
+
+### Verify Kong is running
+
+```bash
+curl http://localhost:8001/
+```
+
+### Confirm configured services and routes
+
+```bash
+curl http://localhost:8001/services
+curl http://localhost:8001/routes
+```
+
+### Test proxy behavior
+
+```bash
+curl http://localhost:8000/api/ping
+curl http://localhost:8000/health
+```
 
 ## Health check
 

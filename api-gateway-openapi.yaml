@@ -1,0 +1,151 @@
+openapi: 3.1.0
+info:
+  title: Flood Management API Gateway
+  version: 1.0.0
+  description: |
+    API gateway contract for Flood Management.
+    Use this OpenAPI file to upload to Kong Konnect or another gateway control plane.
+servers:
+  - url: http://localhost
+    description: Local gateway entry point
+paths:
+  /api:
+    summary: Flood backend API root proxy
+    description: Entry for API gateway routing to backend services.
+    get:
+      summary: Proxy GET to backend API
+      responses:
+        "200":
+          description: Successful response
+    post:
+      summary: Proxy POST to backend API
+      responses:
+        "200":
+          description: Successful response
+    put:
+      summary: Proxy PUT to backend API
+      responses:
+        "200":
+          description: Successful response
+    patch:
+      summary: Proxy PATCH to backend API
+      responses:
+        "200":
+          description: Successful response
+    delete:
+      summary: Proxy DELETE to backend API
+      responses:
+        "200":
+          description: Successful response
+
+  /api/{proxyPath}:
+    summary: Flood backend API wildcard proxy
+    description: Proxy any /api/* path to the backend service.
+    parameters:
+      - name: proxyPath
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Wildcard path segment for API proxying.
+    get:
+      summary: Proxy GET to backend API
+      responses:
+        "200":
+          description: Successful response
+    post:
+      summary: Proxy POST to backend API
+      responses:
+        "200":
+          description: Successful response
+    put:
+      summary: Proxy PUT to backend API
+      responses:
+        "200":
+          description: Successful response
+    patch:
+      summary: Proxy PATCH to backend API
+      responses:
+        "200":
+          description: Successful response
+    delete:
+      summary: Proxy DELETE to backend API
+      responses:
+        "200":
+          description: Successful response
+
+  /auth:
+    summary: Authentication gateway root proxy
+    description: Entry for auth service routing.
+    get:
+      summary: Proxy GET to auth service
+      responses:
+        "200":
+          description: Successful response
+    post:
+      summary: Proxy POST to auth service
+      responses:
+        "200":
+          description: Successful response
+    put:
+      summary: Proxy PUT to auth service
+      responses:
+        "200":
+          description: Successful response
+    patch:
+      summary: Proxy PATCH to auth service
+      responses:
+        "200":
+          description: Successful response
+    delete:
+      summary: Proxy DELETE to auth service
+      responses:
+        "200":
+          description: Successful response
+
+  /auth/{proxyPath}:
+    summary: Authentication gateway wildcard proxy
+    description: Proxy any /auth/* path to the auth service.
+    parameters:
+      - name: proxyPath
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Wildcard path segment for auth proxying.
+    get:
+      summary: Proxy GET to auth service
+      responses:
+        "200":
+          description: Successful response
+    post:
+      summary: Proxy POST to auth service
+      responses:
+        "200":
+          description: Successful response
+    put:
+      summary: Proxy PUT to auth service
+      responses:
+        "200":
+          description: Successful response
+    patch:
+      summary: Proxy PATCH to auth service
+      responses:
+        "200":
+          description: Successful response
+    delete:
+      summary: Proxy DELETE to auth service
+      responses:
+        "200":
+          description: Successful response
+
+  /health:
+    summary: Health check proxy
+    description: Health check routed to the backend service.
+    get:
+      summary: Get service health status
+      responses:
+        "200":
+          description: Successful health response
+components:
+  schemas: {}

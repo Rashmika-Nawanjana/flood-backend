@@ -10,11 +10,40 @@ services:
       - postgres
       - influxdb
 
+  auth:
+    build: ./auth-service
+    container_name: flood-auth
+
+  sensor-service:
+    build: ./sensor-service
+    container_name: flood-sensor-service
+    depends_on:
+      - postgres
+      - influxdb
+
+  intelligence-service:
+    build: ./intelligence-service
+    container_name: flood-intelligence-service
+    depends_on:
+      - postgres
+      - influxdb
+
+  zone-service:
+    build: ./zone-service
+    container_name: flood-zone-service
+    depends_on:
+      - postgres
+      - influxdb
+
   kong:
     image: kong:3.4
     container_name: flood-kong
     depends_on:
       - api
+      - auth
+      - sensor-service
+      - intelligence-service
+      - zone-service
     environment:
       KONG_DATABASE: "off"
       KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/api-gateway-spec.yaml

@@ -40,8 +40,7 @@ This repository now includes:
 
 - External entry points:
   - `/api/*` → backend `api` service
-  - `/auth/*` → auth service placeholder
-- Rate limiting is configured for `/api/*` with a local limit of 30 requests per minute.
+- `/auth/*` → dedicated `auth` microservice
 - `kong` is configured in DB-less mode and reads `api-gateway-spec.yaml` at startup.
 
 ### Run Kong with the gateway spec

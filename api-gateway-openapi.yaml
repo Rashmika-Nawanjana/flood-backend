@@ -3,149 +3,140 @@ info:
   title: Flood Management API Gateway
   version: 1.0.0
   description: |
-    API gateway contract for Flood Management.
+    API gateway contract for Flood Management Microservices.
     Use this OpenAPI file to upload to Kong Konnect or another gateway control plane.
 servers:
   - url: http://localhost
     description: Local gateway entry point
 paths:
-  /api:
-    summary: Flood backend API root proxy
-    description: Entry for API gateway routing to backend services.
-    get:
-      summary: Proxy GET to backend API
-      responses:
-        "200":
-          description: Successful response
-    post:
-      summary: Proxy POST to backend API
-      responses:
-        "200":
-          description: Successful response
-    put:
-      summary: Proxy PUT to backend API
-      responses:
-        "200":
-          description: Successful response
-    patch:
-      summary: Proxy PATCH to backend API
-      responses:
-        "200":
-          description: Successful response
-    delete:
-      summary: Proxy DELETE to backend API
-      responses:
-        "200":
-          description: Successful response
-
-  /api/{proxyPath}:
-    summary: Flood backend API wildcard proxy
-    description: Proxy any /api/* path to the backend service.
-    parameters:
-      - name: proxyPath
-        in: path
-        required: true
-        schema:
-          type: string
-        description: Wildcard path segment for API proxying.
-    get:
-      summary: Proxy GET to backend API
-      responses:
-        "200":
-          description: Successful response
-    post:
-      summary: Proxy POST to backend API
-      responses:
-        "200":
-          description: Successful response
-    put:
-      summary: Proxy PUT to backend API
-      responses:
-        "200":
-          description: Successful response
-    patch:
-      summary: Proxy PATCH to backend API
-      responses:
-        "200":
-          description: Successful response
-    delete:
-      summary: Proxy DELETE to backend API
-      responses:
-        "200":
-          description: Successful response
-
   /auth:
-    summary: Authentication gateway root proxy
-    description: Entry for auth service routing.
+    summary: Authentication service proxy
     get:
-      summary: Proxy GET to auth service
       responses:
         "200":
           description: Successful response
     post:
-      summary: Proxy POST to auth service
-      responses:
-        "200":
-          description: Successful response
-    put:
-      summary: Proxy PUT to auth service
-      responses:
-        "200":
-          description: Successful response
-    patch:
-      summary: Proxy PATCH to auth service
-      responses:
-        "200":
-          description: Successful response
-    delete:
-      summary: Proxy DELETE to auth service
       responses:
         "200":
           description: Successful response
 
   /auth/{proxyPath}:
-    summary: Authentication gateway wildcard proxy
-    description: Proxy any /auth/* path to the auth service.
+    summary: Authentication service wildcard proxy
     parameters:
       - name: proxyPath
         in: path
         required: true
         schema:
           type: string
-        description: Wildcard path segment for auth proxying.
     get:
-      summary: Proxy GET to auth service
-      responses:
-        "200":
-          description: Successful response
+      responses: { "200": { description: Success } }
     post:
-      summary: Proxy POST to auth service
-      responses:
-        "200":
-          description: Successful response
+      responses: { "200": { description: Success } }
     put:
-      summary: Proxy PUT to auth service
-      responses:
-        "200":
-          description: Successful response
+      responses: { "200": { description: Success } }
     patch:
-      summary: Proxy PATCH to auth service
-      responses:
-        "200":
-          description: Successful response
+      responses: { "200": { description: Success } }
     delete:
-      summary: Proxy DELETE to auth service
-      responses:
-        "200":
-          description: Successful response
+      responses: { "200": { description: Success } }
+
+  /v1/sensors:
+    summary: Sensor service proxy
+    get:
+      responses: { "200": { description: Success } }
+    post:
+      responses: { "200": { description: Success } }
+
+  /v1/sensors/{proxyPath}:
+    summary: Sensor service wildcard proxy
+    parameters:
+      - name: proxyPath
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      responses: { "200": { description: Success } }
+    put:
+      responses: { "200": { description: Success } }
+    patch:
+      responses: { "200": { description: Success } }
+    delete:
+      responses: { "200": { description: Success } }
+
+  /v1/anomalies:
+    summary: Anomalies proxy (Sensor Service)
+    get:
+      responses: { "200": { description: Success } }
+
+  /v1/anomalies/{proxyPath}:
+    summary: Anomalies wildcard proxy
+    parameters:
+      - name: proxyPath
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      responses: { "200": { description: Success } }
+
+  /v1/intelligence:
+    summary: Intelligence service proxy
+    get:
+      responses: { "200": { description: Success } }
+
+  /v1/predictions:
+    summary: Predictions proxy (Intelligence Service)
+    get:
+      responses: { "200": { description: Success } }
+
+  /v1/alerts:
+    summary: Alerts proxy (Intelligence Service)
+    get:
+      responses: { "200": { description: Success } }
+
+  /v1/zones:
+    summary: Zone service proxy
+    get:
+      responses: { "200": { description: Success } }
+    post:
+      responses: { "200": { description: Success } }
+
+  /v1/zones/{proxyPath}:
+    summary: Zone service wildcard proxy
+    parameters:
+      - name: proxyPath
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      responses: { "200": { description: Success } }
+    patch:
+      responses: { "200": { description: Success } }
+    delete:
+      responses: { "200": { description: Success } }
+
+  /v1/shelters:
+    summary: Shelters proxy (Zone Service)
+    post:
+      responses: { "200": { description: Success } }
+
+  /v1/shelters/{proxyPath}:
+    summary: Shelters wildcard proxy
+    parameters:
+      - name: proxyPath
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      responses: { "200": { description: Success } }
+    delete:
+      responses: { "200": { description: Success } }
 
   /health:
     summary: Health check proxy
-    description: Health check routed to the backend service.
     get:
-      summary: Get service health status
-      responses:
-        "200":
-          description: Successful health response
+      responses: { "200": { description: Success } }
 components:
   schemas: {}

@@ -1,0 +1,84 @@
+:root {
+  --bg-base: #0b1326;
+  --bg-surface: #171f33;
+  --bg-surface-high: #222a3e;
+  --primary: #3B82F6;
+  --primary-hover: #2563EB;
+  --text-primary: #dbe2fd;
+  --text-secondary: #a0a6b8;
+}
+
+body {
+  background: var(--bg-base) !important;
+  color: var(--text-primary) !important;
+}
+
+.login-pf body {
+  background:
+    radial-gradient(circle at 25% 30%, rgba(59, 130, 246, 0.12), transparent 35%),
+    linear-gradient(135deg, #0b1326 0%, #131b2e 100%) !important;
+}
+
+.card-pf {
+  background: rgba(23, 31, 51, 0.92) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35) !important;
+}
+
+#kc-header-wrapper {
+  color: var(--primary) !important;
+  font-size: 32px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em !important;
+}
+
+#kc-header-wrapper::after {
+  content: " Intelligence Portal";
+  display: block;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  margin-top: 8px;
+}
+
+#kc-page-title {
+  color: var(--text-primary) !important;
+  font-weight: 700 !important;
+}
+
+label {
+  color: var(--text-secondary) !important;
+}
+
+input[type="text"],
+input[type="password"] {
+  background: #222a3e !important;
+  color: var(--text-primary) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 8px !important;
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18) !important;
+}
+
+#kc-login,
+input[type="submit"] {
+  background: var(--primary) !important;
+  border-radius: 8px !important;
+  border: none !important;
+  font-weight: 700 !important;
+}
+
+#kc-login:hover,
+input[type="submit"]:hover {
+  background: var(--primary-hover) !important;
+}
+
+a {
+  color: var(--primary-light, #adc6ff) !important;
+}

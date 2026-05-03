@@ -5,7 +5,7 @@ Minimal FastAPI skeleton to unblock parallel development.
 ## Structure
 
 - `app/main.py`: application entrypoint
-- `app/api/routes.py`: placeholder API routes
+- `app/api/routes.py`: API router aggregator
 - `app/core/config.py`: environment config loader
 - `app/db/session.py`: database placeholder session setup
 
@@ -31,6 +31,52 @@ docker run --rm -p 8000:8000 flood-api
 docker compose up --build
 ```
 
+## API Gateway (Kong)
+
+This repository now includes:
+
+- `api-gateway-spec.yaml` — Kong DB-less declarative config for local/container gateway deployment
+- `api-gateway-openapi.yaml` — OpenAPI file for upload to Kong Konnect or other API gateway control planes
+
+- External entry points:
+  - `/api/*` → backend `api` service
+- `/auth/*` → dedicated `auth` microservice
+- `kong` is configured in DB-less mode and reads `api-gateway-spec.yaml` at startup.
+
+### Run Kong with the gateway spec
+
+For local development (existing compose):
+
+```bash
+docker compose up --build
+```
+
+For deployment with Kong as the gateway service:
+
+```bash
+docker compose -f docker-compose.deploy.yml up -d --build
+```
+
+### Verify Kong is running
+
+```bash
+curl http://localhost:8001/
+```
+
+### Confirm configured services and routes
+
+```bash
+curl http://localhost:8001/services
+curl http://localhost:8001/routes
+```
+
+### Test proxy behavior
+
+```bash
+curl http://localhost:8000/api/ping
+curl http://localhost:8000/health
+```
+
 ## Health check
 
 ```bash
@@ -40,7 +86,7 @@ curl http://localhost:8000/health
 Expected response:
 
 ```json
-{"status": "ok", "service": "flood-backend"}
+{ "status": "ok", "service": "flood-backend" }
 ```
 
 ## Enforced commit message format

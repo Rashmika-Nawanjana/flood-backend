@@ -40,7 +40,11 @@ def wait_for_database() -> None:
 
 
 def run_migrations() -> None:
-    subprocess.run(["alembic", "upgrade", "head"], check=True)
+    subprocess.run(
+        ["alembic", "-c", "/app/alembic.ini", "upgrade", "head"],
+        check=True,
+        cwd="/app",
+    )
 
 
 def start_server() -> None:

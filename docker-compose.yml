@@ -11,6 +11,20 @@ services:
     depends_on:
       - postgres
       - influxdb
+      - keycloak
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: flood-keycloak
+    command: start-dev
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    ports:
+      - "8080:8080"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+      - ./keycloak-themes:/opt/keycloak/themes
 
   postgres:
     image: postgis/postgis:15-3.4
@@ -35,3 +49,4 @@ services:
 volumes:
   pg_data:
   influx_data:
+  keycloak_data:

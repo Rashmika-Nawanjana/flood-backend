@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from app.auth.keycloak import get_current_user
+from app.auth.keycloak import get_current_user, require_roles
 
 router = APIRouter(prefix="/api")
 
@@ -14,5 +14,33 @@ def ping() -> dict[str, str]:
 def get_me(current_user: dict = Depends(get_current_user)) -> dict:
     return {
         "authenticated": True,
+        "user": current_user,
+    }
+
+
+@router.get("/rbac/admin-test", tags=["rbac"])
+def admin_test(current_user: dict = Depends(require_roles(["admin"]))) -> dict:
+    return {
+        "message": "Admin access granted",
+        "user": current_user,
+    }
+
+
+@router.get("/rbac/field-test", tags=["rbac"])
+def field_test(
+    current_user: dict = Depends(require_roles(["admin", "field_officer"]))
+) -> dict:
+    return {
+        "message": "Field officer access granted",
+        "user": current_user,
+    }
+
+
+@router.get("/rbac/citizen-test", tags=["rbac"])
+def citizen_test(
+    current_user: dict = Depends(require_roles(["admin", "field_officer", "citizen"]))
+) -> dict:
+    return {
+        "message": "Citizen access granted",
         "user": current_user,
     }

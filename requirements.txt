@@ -4,4 +4,5 @@ python-dotenv==1.1.1
 SQLAlchemy==2.0.36
 alembic==1.13.2
 psycopg[binary]==3.2.3
-python-socketio==5.11.4
+python-jose[cryptography]==3.3.0
+requests==2.32.3

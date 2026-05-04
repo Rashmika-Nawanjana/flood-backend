@@ -7,8 +7,8 @@ services:
     env_file:
       - .env.example
     environment:
-      DATABASE_URL: postgresql+psycopg://admin:admin@postgres:5432/flooddb
-      INFLUXDB_URL: http://influxdb:8086
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-flooddb}
+      INFLUXDB_URL: http://${INFLUXDB_HOST:-influxdb}:${INFLUXDB_PORT:-8086}
     depends_on:
       - postgres
       - influxdb
@@ -34,6 +34,11 @@ services:
   sensor-service:
     build: ./sensor-service
     container_name: flood-sensor-service
+    ports:
+      - "${SENSOR_PORT:-8003}:8002"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-flooddb}
+      INFLUXDB_URL: http://${INFLUXDB_HOST:-influxdb}:${INFLUXDB_PORT:-8086}
     depends_on:
       - postgres
       - influxdb
@@ -41,6 +46,9 @@ services:
   intelligence-service:
     build: ./intelligence-service
     container_name: flood-intelligence-service
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-flooddb}
+      INFLUXDB_URL: http://${INFLUXDB_HOST:-influxdb}:${INFLUXDB_PORT:-8086}
     depends_on:
       - postgres
       - influxdb
@@ -48,6 +56,11 @@ services:
   zone-service:
     build: ./zone-service
     container_name: flood-zone-service
+    ports:
+      - "${ZONE_PORT:-8004}:8004"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-flooddb}
+      INFLUXDB_URL: http://${INFLUXDB_HOST:-influxdb}:${INFLUXDB_PORT:-8086}
     depends_on:
       - postgres
       - influxdb

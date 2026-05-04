@@ -3,12 +3,29 @@ services:
     build: .
     container_name: flood-api
     ports:
-      - "8002:8000"
+      - "${API_PORT:-8002}:8000"
     env_file:
       - .env.example
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-flooddb}
+      INFLUXDB_URL: http://${INFLUXDB_HOST:-influxdb}:${INFLUXDB_PORT:-8086}
     depends_on:
       - postgres
       - influxdb
+      - keycloak
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: flood-keycloak
+    command: start-dev
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+    ports:
+      - "${KEYCLOAK_PORT:-8080}:8080"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+      - ./keycloak-themes:/opt/keycloak/themes
 
   auth:
     build: ./auth-service
@@ -17,6 +34,11 @@ services:
   sensor-service:
     build: ./sensor-service
     container_name: flood-sensor-service
+    ports:
+      - "${SENSOR_PORT:-8003}:8002"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-flooddb}
+      INFLUXDB_URL: http://${INFLUXDB_HOST:-influxdb}:${INFLUXDB_PORT:-8086}
     depends_on:
       - postgres
       - influxdb
@@ -24,6 +46,9 @@ services:
   intelligence-service:
     build: ./intelligence-service
     container_name: flood-intelligence-service
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-flooddb}
+      INFLUXDB_URL: http://${INFLUXDB_HOST:-influxdb}:${INFLUXDB_PORT:-8086}
     depends_on:
       - postgres
       - influxdb
@@ -31,6 +56,11 @@ services:
   zone-service:
     build: ./zone-service
     container_name: flood-zone-service
+    ports:
+      - "${ZONE_PORT:-8004}:8004"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-flooddb}
+      INFLUXDB_URL: http://${INFLUXDB_HOST:-influxdb}:${INFLUXDB_PORT:-8086}
     depends_on:
       - postgres
       - influxdb
@@ -53,8 +83,8 @@ services:
       KONG_ADMIN_ERROR_LOG: /dev/stderr
       KONG_ADMIN_LISTEN: 0.0.0.0:8001
     ports:
-      - "8000:8000"
-      - "8001:8001"
+      - "${KONG_PROXY_PORT:-8000}:8000"
+      - "${KONG_ADMIN_PORT:-8001}:8001"
     volumes:
       - ./api-gateway-spec.yaml:/usr/local/kong/declarative/api-gateway-spec.yaml:ro
 
@@ -62,11 +92,11 @@ services:
     image: postgis/postgis:15-3.4
     container_name: flood-postgres
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin
-      POSTGRES_DB: flooddb
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
+      POSTGRES_DB: ${POSTGRES_DB:-flooddb}
     ports:
-      - "5433:5432"
+      - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
 
@@ -74,10 +104,11 @@ services:
     image: influxdb:2.7
     container_name: flood-influxdb
     ports:
-      - "8086:8086"
+      - "${INFLUXDB_PORT:-8086}:8086"
     volumes:
       - influx_data:/var/lib/influxdb2
 
 volumes:
   pg_data:
   influx_data:
+  keycloak_data:

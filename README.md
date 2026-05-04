@@ -6,7 +6,6 @@ Minimal FastAPI skeleton to unblock parallel development.
 
 - `app/main.py`: application entrypoint
 - `app/api/routes.py`: API router aggregator
-- `app/ws/live.py`: Socket.IO live event broadcaster
 - `app/core/config.py`: environment config loader
 - `app/db/session.py`: database placeholder session setup
 

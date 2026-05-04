@@ -1,4 +1,11 @@
 services:
+  frontend:
+    build: ../flood-frontend
+    container_name: flood-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - kong
   api:
     build: .
     container_name: flood-api

@@ -32,7 +32,7 @@ class Settings:
     # CHANGED: Database URL is derived from POSTGRES_PORT if DATABASE_URL is missing
     database_url: str = os.getenv(
         "DATABASE_URL",
-        f"postgresql://admin:admin@localhost:{postgres_port}/flooddb",
+        f"postgresql+psycopg://admin:admin@localhost:{postgres_port}/flooddb",
     )
 
     # CHANGED: InfluxDB URL is derived from INFLUXDB_PORT if INFLUXDB_URL is missing

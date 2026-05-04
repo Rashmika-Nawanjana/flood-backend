@@ -1,84 +1,361 @@
+/* =========================================================
+   FloodSense LK — Keycloak Login Theme
+   ========================================================= */
+
+/* Design tokens */
 :root {
   --bg-base: #0b1326;
-  --bg-surface: #171f33;
   --bg-surface-high: #222a3e;
+
   --primary: #3B82F6;
   --primary-hover: #2563EB;
+  --primary-light: #adc6ff;
+
   --text-primary: #dbe2fd;
   --text-secondary: #a0a6b8;
+  --text-muted: #8c909f;
+
+  --radius: 8px;
+  --field-radius: 10px;
+  --field-width: 378px;
+  --field-bg: rgba(34, 42, 62, 0.58);
+  --field-border: rgba(255, 255, 255, 0.08);
 }
+
+/* =========================================================
+   Base page
+   ========================================================= */
 
 body {
+  margin: 0;
+  min-height: 100vh;
   background: var(--bg-base) !important;
-  color: var(--text-primary) !important;
+  background-image: none !important;
+  color: var(--text-primary);
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+.login-pf,
 .login-pf body {
-  background:
-    radial-gradient(circle at 25% 30%, rgba(59, 130, 246, 0.12), transparent 35%),
-    linear-gradient(135deg, #0b1326 0%, #131b2e 100%) !important;
+  background: var(--bg-base) !important;
+  background-image: none !important;
 }
 
-.card-pf {
-  background: rgba(23, 31, 51, 0.92) !important;
-  border: 1px solid rgba(255, 255, 255, 0.06) !important;
-  border-radius: 12px !important;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35) !important;
+/* Main layout */
+.login-pf-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 48px 220px 48px 48px;
+}
+
+/* =========================================================
+   Left branding area
+   ========================================================= */
+
+#kc-header {
+  position: fixed;
+  left: 10%;
+  top: 48%;
+  transform: translateY(-50%);
+  text-align: left;
+  color: var(--text-primary);
 }
 
 #kc-header-wrapper {
-  color: var(--primary) !important;
-  font-size: 32px !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.02em !important;
+  font-size: 0;
+  color: transparent;
+}
+
+#kc-header-wrapper::before {
+  content: "FloodSense LK";
+  display: block;
+  color: var(--primary);
+  font-size: 42px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  line-height: 1.1;
 }
 
 #kc-header-wrapper::after {
-  content: " Intelligence Portal";
+  content: "INTELLIGENCE PORTAL";
   display: block;
+  margin-top: 14px;
   color: var(--text-secondary);
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.25em;
-  margin-top: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  line-height: 1.2;
 }
 
+#kc-header::after {
+  content: "Real-time flood monitoring, AI-powered predictions, and emergency response management for Sri Lanka's river basins.";
+  display: block;
+  margin-top: 34px;
+  max-width: 440px;
+  color: var(--text-secondary);
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+/* =========================================================
+   Login card / right side
+   ========================================================= */
+
+.card-pf {
+  width: 420px;
+  max-width: 420px;
+  padding: 42px 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+#kc-content,
+#kc-form-wrapper {
+  width: 100%;
+}
+
+/* Page title */
 #kc-page-title {
-  color: var(--text-primary) !important;
-  font-weight: 700 !important;
+  margin-bottom: 8px;
+  text-align: left;
+  font-size: 0;
+  line-height: 1;
+}
+
+#kc-page-title::before {
+  content: "Sign In";
+  display: block;
+  color: var(--text-primary);
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.5px;
+}
+
+#kc-page-title::after {
+  content: "Access the FloodSense Intelligence Portal";
+  display: block;
+  margin-top: 12px;
+  color: var(--text-secondary);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+/* =========================================================
+   Form fields
+   ========================================================= */
+
+#kc-form {
+  margin-top: 18px;
+}
+
+.form-group {
+  margin-bottom: 18px;
 }
 
 label {
-  color: var(--text-secondary) !important;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 1.8px;
 }
 
-input[type="text"],
-input[type="password"] {
-  background: #222a3e !important;
+/* Username/email field */
+#kc-form-login input#username,
+#kc-form input[type="text"],
+#kc-form input[type="email"] {
+  width: var(--field-width) !important;
+  max-width: var(--field-width) !important;
+  height: 36px !important;
+  padding: 0 16px;
+
+  background: var(--field-bg) !important;
+  background-image: none !important;
   color: var(--text-primary) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  border-radius: 8px !important;
+
+  border: 1px solid var(--field-border) !important;
+  border-radius: var(--field-radius) !important;
+
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+  font-size: 15px;
 }
 
-input[type="text"]:focus,
-input[type="password"]:focus {
-  border-color: var(--primary) !important;
+/* Focus state */
+#kc-form-login input:focus {
+  background: rgba(34, 42, 62, 0.74) !important;
+  border-color: rgba(59, 130, 246, 0.75) !important;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18) !important;
+  outline: none !important;
 }
 
-#kc-login,
-input[type="submit"] {
-  background: var(--primary) !important;
-  border-radius: 8px !important;
+/* =========================================================
+   Password field + eye button
+   ========================================================= */
+
+#kc-form-login .pf-c-input-group {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  width: auto !important;
+  background: transparent !important;
   border: none !important;
-  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+
+/* Password input */
+#kc-form-login .pf-c-input-group input#password.pf-c-form-control {
+  flex: none !important;
+  width: var(--field-width) !important;
+  max-width: var(--field-width) !important;
+  height: 36px !important;
+
+  background: var(--field-bg) !important;
+  background-image: none !important;
+  color: var(--text-primary) !important;
+  -webkit-text-fill-color: var(--text-primary) !important;
+
+  border: 1px solid var(--field-border) !important;
+  border-radius: var(--field-radius) !important;
+
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Chrome autofill fix */
+#kc-form-login input#password:-webkit-autofill,
+#kc-form-login input#password:-webkit-autofill:hover,
+#kc-form-login input#password:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px rgba(34, 42, 62, 0.95) inset !important;
+  -webkit-text-fill-color: var(--text-primary) !important;
+}
+
+/* Eye button: blends into background */
+#kc-form-login .pf-c-input-group button.pf-c-button.pf-m-control {
+  width: 52px !important;
+  min-width: 52px !important;
+  height: 52px !important;
+
+  background: var(--bg-base) !important;
+  background-color: var(--bg-base) !important;
+  color: var(--text-primary) !important;
+
+  border: 1px solid var(--bg-base) !important;
+  border-radius: var(--field-radius) !important;
+
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+#kc-form-login .pf-c-input-group button.pf-c-button.pf-m-control::after {
+  border: none !important;
+}
+
+/* Sign in button - rounded glass pill */
+#kc-login,
+input[type="submit"],
+.btn-primary {
+  width: 200px !important;
+  height: 46px !important;
+  margin-top: 22px;
+  margin-left: 89px;
+
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.95),
+    rgba(37, 99, 235, 0.78)
+  ) !important;
+
+  color: #ffffff !important;
+
+  border: 1px solid rgba(173, 198, 255, 0.28) !important;
+  border-radius: 999px !important;
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.26),
+    0 16px 36px rgba(59, 130, 246, 0.28) !important;
+
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+
+  transition: 180ms ease;
 }
 
 #kc-login:hover,
-input[type="submit"]:hover {
-  background: var(--primary-hover) !important;
+input[type="submit"]:hover,
+.btn-primary:hover {
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 1),
+    rgba(37, 99, 235, 0.9)
+  ) !important;
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    0 20px 42px rgba(59, 130, 246, 0.34) !important;
+
+  transform: translateY(-1px);
 }
 
+/* =========================================================
+   Links and alerts
+   ========================================================= */
+
 a {
-  color: var(--primary-light, #adc6ff) !important;
+  color: var(--primary-light);
+}
+
+a:hover {
+  color: var(--primary);
+}
+
+.alert-error,
+.alert-warning,
+.alert-info {
+  background: rgba(239, 68, 68, 0.12);
+  color: #fecaca;
+  border: none;
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+/* =========================================================
+   Mobile responsiveness
+   ========================================================= */
+
+@media (max-width: 900px) {
+  .login-pf-page {
+    flex-direction: column;
+    justify-content: center;
+    padding: 32px 20px;
+  }
+
+  #kc-header {
+    position: static;
+    transform: none;
+    text-align: center;
+    margin-bottom: 40px;
+  }
+
+  #kc-header-wrapper::before {
+    font-size: 34px;
+  }
+
+  #kc-header-wrapper::after {
+    font-size: 14px;
+    letter-spacing: 4px;
+  }
+
+  .card-pf {
+    width: 100%;
+    max-width: 420px;
+  }
+
+  #kc-page-title {
+    text-align: center;
+  }
 }

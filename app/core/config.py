@@ -56,5 +56,24 @@ class Settings:
     def allowed_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.allowed_origins.split(",")]
 
+    frontend_url: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    allowed_origins: str = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+
+    keycloak_url: str = os.getenv("KEYCLOAK_URL", "http://localhost:8080")
+    keycloak_realm: str = os.getenv("KEYCLOAK_REALM", "flood-management")
+    keycloak_client_id: str = os.getenv("KEYCLOAK_CLIENT_ID", "flood-frontend")
+
+    @property
+    def keycloak_issuer(self) -> str:
+        return f"{self.keycloak_url}/realms/{self.keycloak_realm}"
+
+    @property
+    def keycloak_jwks_url(self) -> str:
+        return f"{self.keycloak_issuer}/protocol/openid-connect/certs"
+
+    @property
+    def allowed_origins_list(self) -> list[str]:
+        return [origin.strip() for origin in self.allowed_origins.split(",")]
+
 
 settings = Settings()

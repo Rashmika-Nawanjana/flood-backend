@@ -1,42 +1,17 @@
 services:
-  frontend:
-    build: ../flood-frontend
-    container_name: flood-frontend
-    ports:
-      - "${FRONTEND_PORT:-3000}:80"
-    depends_on:
-      - kong
   api:
     build: .
     container_name: flood-api
     ports:
       - "${API_PORT:-8002}:8000"
     env_file:
-      - .env.example
+      - .env
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-flooddb}
       INFLUXDB_URL: http://${INFLUXDB_HOST:-influxdb}:${INFLUXDB_PORT:-8086}
     depends_on:
       - postgres
       - influxdb
-      - keycloak
-
-  keycloak:
-    image: quay.io/keycloak/keycloak:latest
-    container_name: flood-keycloak
-    command: start-dev
-    environment:
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
-    ports:
-      - "${KEYCLOAK_PORT:-8080}:8080"
-    volumes:
-      - keycloak_data:/opt/keycloak/data
-      - ./keycloak-themes:/opt/keycloak/themes
-
-  auth:
-    build: ./auth-service
-    container_name: flood-auth
 
   sensor-service:
     build: ./sensor-service
@@ -77,7 +52,6 @@ services:
     container_name: flood-kong
     depends_on:
       - api
-      - auth
       - sensor-service
       - intelligence-service
       - zone-service
@@ -103,7 +77,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
       POSTGRES_DB: ${POSTGRES_DB:-flooddb}
     ports:
-      - "${POSTGRES_PORT:-5433}:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
 
@@ -118,4 +92,3 @@ services:
 volumes:
   pg_data:
   influx_data:
-  keycloak_data:

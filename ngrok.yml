@@ -1,0 +1,16 @@
+version: "3"
+
+# FloodSense LK — ngrok Dev Tunnel Config
+# Used only for local development. Defines a named tunnel `flood-backend`
+# for the ngrok CLI. Update `authtoken` via `ngrok authtoken <TOKEN>`.
+
+# Example usage:
+#   npx ngrok start --config ngrok.yml flood-backend
+
+tunnels:
+  flood-backend:
+    proto: http
+    addr: 8000
+    bind_tls: true
+    # If you have a reserved hostname, uncomment and set it here:
+    # hostname: revenge-crank-bobcat.ngrok-free.dev

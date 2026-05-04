@@ -1,14 +1,11 @@
 from fastapi import APIRouter, Depends
 
-from app.api.routers import admin, intelligence, sensors, zones
+from app.api.routers import admin
 from app.auth.keycloak import get_current_user, require_roles
 
 router = APIRouter(prefix="/api")
 
-# Existing service routers from dev branch
-router.include_router(sensors.router)
-router.include_router(zones.router)
-router.include_router(intelligence.router)
+# Admin control plane only; microservices routed via Kong
 router.include_router(admin.router)
 
 

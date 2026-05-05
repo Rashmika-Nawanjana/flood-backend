@@ -1,0 +1,19 @@
+_format_version: "3.0"
+
+plugins:
+  - name: rate-limiting
+    config:
+      limit_by: consumer
+      policy: local
+      minute: 30
+
+  - name: key-auth
+    config:
+      key_names:
+        - apikey
+      hide_credentials: false
+
+consumers:
+  - username: flood-backend-consumer
+    keyauth_credentials:
+      - key: REPLACE_WITH_YOUR_API_KEY

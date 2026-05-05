@@ -1,0 +1,299 @@
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+import psycopg
+import uuid
+from psycopg.types.json import Json
+
+from app.db.pg import get_connection
+
+router = APIRouter(prefix="/v1/admin", tags=["admin"])
+
+
+class SensorLocation(BaseModel):
+    lat: float
+    lng: float
+    zone_id: str
+    address: str
+
+
+class SensorThresholds(BaseModel):
+    watch_m: float
+    advisory_m: float
+    warning_m: float
+    critical_m: float
+
+
+class SensorCreatePayload(BaseModel):
+    sensor_id: str
+    name: str
+    location: SensorLocation
+    installed_date: str
+    firmware_version: str
+    thresholds: SensorThresholds
+
+
+class SensorDeviceHealthUpdate(BaseModel):
+    last_maintenance: str
+    firmware_version: str
+
+
+class SensorThresholdsUpdate(BaseModel):
+    warning_m: float
+    critical_m: float
+
+
+class SensorUpdatePayload(BaseModel):
+    device_health: SensorDeviceHealthUpdate
+    thresholds: SensorThresholdsUpdate
+    justification: str
+
+
+class ZoneGeometry(BaseModel):
+    type: str
+    coordinates: list
+
+
+class ZoneCreatePayload(BaseModel):
+    zone_id: str
+    zone_name: str
+    geometry: ZoneGeometry
+    population_at_risk: int
+    description: str
+
+
+class ZoneUpdatePayload(BaseModel):
+    geometry: ZoneGeometry
+
+
+class ShelterCreatePayload(BaseModel):
+    zone_id: str
+    name: str
+    lat: float
+    lng: float
+    capacity: int
+    contact_number: str
+    status: str
+
+
+class ShelterUpdatePayload(BaseModel):
+    current_occupancy: int
+    status: str
+
+
+class AnomalyUpdatePayload(BaseModel):
+    status: str
+    resolution_note: str
+    resolved_by: str
+
+
+@router.post("/sensors")
+def create_sensor(payload: SensorCreatePayload) -> dict:
+    insert = """
+    INSERT INTO sensor_nodes (
+        sensor_id, name, zone_id, lat, lng, address, installed_date,
+        firmware_version, watch_m, advisory_m, warning_m, critical_m,
+        is_active, last_maintenance
+    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,TRUE,%s)
+    ON CONFLICT (sensor_id) DO UPDATE SET
+      name = EXCLUDED.name,
+      zone_id = EXCLUDED.zone_id,
+      lat = EXCLUDED.lat,
+      lng = EXCLUDED.lng,
+      address = EXCLUDED.address,
+      installed_date = EXCLUDED.installed_date,
+      firmware_version = EXCLUDED.firmware_version,
+      watch_m = EXCLUDED.watch_m,
+      advisory_m = EXCLUDED.advisory_m,
+      warning_m = EXCLUDED.warning_m,
+      critical_m = EXCLUDED.critical_m,
+      last_maintenance = EXCLUDED.last_maintenance
+    RETURNING *
+    """
+    data = payload.model_dump()
+    loc = data["location"]
+    thresholds = data["thresholds"]
+    params = (
+        data["sensor_id"],
+        data.get("name"),
+        loc.get("zone_id"),
+        loc.get("lat"),
+        loc.get("lng"),
+        loc.get("address"),
+        data.get("installed_date"),
+        data.get("firmware_version"),
+        thresholds.get("watch_m"),
+        thresholds.get("advisory_m"),
+        thresholds.get("warning_m"),
+        thresholds.get("critical_m"),
+        None,
+    )
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(insert, params)
+                row = cur.fetchone()
+    except psycopg.errors.ForeignKeyViolation as exc:
+        raise HTTPException(status_code=400, detail="Invalid zone_id for sensor") from exc
+    return {"status": "success", "data": row}
+
+
+@router.patch("/sensors/{sensor_id}")
+def update_sensor(sensor_id: str, payload: SensorUpdatePayload) -> dict:
+    data = payload.model_dump()
+    dh = data.get("device_health")
+    thr = data.get("thresholds")
+    update = """
+    UPDATE sensor_nodes SET
+      last_maintenance = %s,
+      firmware_version = %s,
+      warning_m = %s,
+      critical_m = %s
+    WHERE sensor_id = %s
+    RETURNING *
+    """
+    params = (
+        dh.get("last_maintenance") if dh else None,
+        dh.get("firmware_version") if dh else None,
+        thr.get("warning_m") if thr else None,
+        thr.get("critical_m") if thr else None,
+        sensor_id,
+    )
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(update, params)
+            row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Sensor not found")
+    return {"status": "success", "data": row}
+
+
+@router.delete("/sensors/{sensor_id}")
+def delete_sensor(sensor_id: str) -> dict:
+    update = "UPDATE sensor_nodes SET is_active = FALSE WHERE sensor_id = %s RETURNING sensor_id"
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(update, (sensor_id,))
+            row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Sensor not found")
+    return {"status": "success", "message": f"Sensor {sensor_id} deactivated."}
+
+
+@router.post("/zones")
+def create_zone(payload: ZoneCreatePayload) -> dict:
+    insert = """
+    INSERT INTO zones (zone_id, zone_name, geometry, population_at_risk, description, last_updated)
+    VALUES (%s,%s,%s,%s,%s,NOW())
+    ON CONFLICT (zone_id) DO UPDATE SET
+      zone_name = EXCLUDED.zone_name,
+      geometry = EXCLUDED.geometry,
+      population_at_risk = EXCLUDED.population_at_risk,
+      description = EXCLUDED.description,
+      last_updated = NOW()
+    RETURNING *
+    """
+    data = payload.model_dump()
+    params = (
+        data["zone_id"],
+        data.get("zone_name"),
+        Json(data.get("geometry")),
+        data.get("population_at_risk"),
+        data.get("description"),
+    )
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(insert, params)
+            row = cur.fetchone()
+    return {"status": "success", "data": row}
+
+
+@router.patch("/zones/{zone_id}")
+def update_zone(zone_id: str, payload: ZoneUpdatePayload) -> dict:
+    data = payload.model_dump()
+    update = "UPDATE zones SET geometry = %s, last_updated = NOW() WHERE zone_id = %s RETURNING *"
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(update, (Json(data.get("geometry")), zone_id))
+            row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Zone not found")
+    return {"status": "success", "data": row}
+
+
+@router.delete("/zones/{zone_id}")
+def delete_zone(zone_id: str) -> dict:
+    # perform a hard delete for now
+    delete = "DELETE FROM zones WHERE zone_id = %s RETURNING zone_id"
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(delete, (zone_id,))
+            row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Zone not found")
+    return {"status": "success", "message": f"Zone {zone_id} deleted."}
+
+
+@router.post("/shelters")
+def create_shelter(payload: ShelterCreatePayload) -> dict:
+    shelter_id = str(uuid.uuid4())
+    insert = """
+    INSERT INTO zone_shelters (
+        shelter_id, zone_id, name, capacity, current_occupancy, lat, lng, distance_km, contact_number, status
+    ) VALUES (%s,%s,%s,%s,0,%s,%s,%s,%s,%s)
+    RETURNING *
+    """
+    data = payload.model_dump()
+    params = (
+        shelter_id,
+        data.get("zone_id"),
+        data.get("name"),
+        data.get("capacity"),
+        data.get("lat"),
+        data.get("lng"),
+        None,
+        data.get("contact_number"),
+        data.get("status"),
+    )
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(insert, params)
+            row = cur.fetchone()
+    return {"status": "success", "data": row}
+
+
+@router.patch("/shelters/{shelter_id}")
+def update_shelter(shelter_id: str, payload: ShelterUpdatePayload) -> dict:
+    data = payload.model_dump()
+    update = "UPDATE zone_shelters SET current_occupancy = %s, status = %s WHERE shelter_id = %s RETURNING *"
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(update, (data.get("current_occupancy"), data.get("status"), shelter_id))
+            row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Shelter not found")
+    return {"status": "success", "data": row}
+
+
+@router.delete("/shelters/{shelter_id}")
+def delete_shelter(shelter_id: str) -> dict:
+    delete = "DELETE FROM zone_shelters WHERE shelter_id = %s RETURNING shelter_id"
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(delete, (shelter_id,))
+            row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Shelter not found")
+    return {"status": "success", "message": f"Shelter {shelter_id} removed."}
+
+
+@router.patch("/anomalies/{anomaly_id}")
+def update_anomaly(anomaly_id: str, payload: AnomalyUpdatePayload) -> dict:
+    data = payload.model_dump()
+    update = "UPDATE anomalies SET status = %s WHERE anomaly_id = %s RETURNING *"
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(update, (data.get("status"), anomaly_id))
+            row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Anomaly not found")
+    return {"status": "success", "data": row}

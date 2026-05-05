@@ -1,0 +1,53 @@
+_format_version: "2.1"
+services:
+  - name: flood-api
+    url: http://api:8000
+    routes:
+      - name: flood-api-route
+        paths:
+          - /api
+        protocols:
+          - http
+          - https
+        methods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+        strip_path: false
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 30
+          policy: local
+          limit_by: consumer
+
+  - name: auth-service
+    url: http://auth:8001
+    routes:
+      - name: auth-service-route
+        paths:
+          - /auth
+        protocols:
+          - http
+          - https
+        methods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+        strip_path: false
+
+  - name: health-service
+    url: http://api:8000
+    routes:
+      - name: health-route
+        paths:
+          - /health
+        protocols:
+          - http
+        strip_path: false

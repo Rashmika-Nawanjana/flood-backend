@@ -1,0 +1,142 @@
+openapi: 3.1.0
+info:
+  title: Flood Management API Gateway
+  version: 1.0.0
+  description: |
+    API gateway contract for Flood Management Microservices.
+    Use this OpenAPI file to upload to Kong Konnect or another gateway control plane.
+servers:
+  - url: http://localhost
+    description: Local gateway entry point
+paths:
+  /auth:
+    summary: Authentication service proxy
+    get:
+      responses:
+        "200":
+          description: Successful response
+    post:
+      responses:
+        "200":
+          description: Successful response
+
+  /auth/{proxyPath}:
+    summary: Authentication service wildcard proxy
+    parameters:
+      - name: proxyPath
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      responses: { "200": { description: Success } }
+    post:
+      responses: { "200": { description: Success } }
+    put:
+      responses: { "200": { description: Success } }
+    patch:
+      responses: { "200": { description: Success } }
+    delete:
+      responses: { "200": { description: Success } }
+
+  /v1/sensors:
+    summary: Sensor service proxy
+    get:
+      responses: { "200": { description: Success } }
+    post:
+      responses: { "200": { description: Success } }
+
+  /v1/sensors/{proxyPath}:
+    summary: Sensor service wildcard proxy
+    parameters:
+      - name: proxyPath
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      responses: { "200": { description: Success } }
+    put:
+      responses: { "200": { description: Success } }
+    patch:
+      responses: { "200": { description: Success } }
+    delete:
+      responses: { "200": { description: Success } }
+
+  /v1/anomalies:
+    summary: Anomalies proxy (Sensor Service)
+    get:
+      responses: { "200": { description: Success } }
+
+  /v1/anomalies/{proxyPath}:
+    summary: Anomalies wildcard proxy
+    parameters:
+      - name: proxyPath
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      responses: { "200": { description: Success } }
+
+  /v1/intelligence:
+    summary: Intelligence service proxy
+    get:
+      responses: { "200": { description: Success } }
+
+  /v1/predictions:
+    summary: Predictions proxy (Intelligence Service)
+    get:
+      responses: { "200": { description: Success } }
+
+  /v1/alerts:
+    summary: Alerts proxy (Intelligence Service)
+    get:
+      responses: { "200": { description: Success } }
+
+  /v1/zones:
+    summary: Zone service proxy
+    get:
+      responses: { "200": { description: Success } }
+    post:
+      responses: { "200": { description: Success } }
+
+  /v1/zones/{proxyPath}:
+    summary: Zone service wildcard proxy
+    parameters:
+      - name: proxyPath
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      responses: { "200": { description: Success } }
+    patch:
+      responses: { "200": { description: Success } }
+    delete:
+      responses: { "200": { description: Success } }
+
+  /v1/shelters:
+    summary: Shelters proxy (Zone Service)
+    post:
+      responses: { "200": { description: Success } }
+
+  /v1/shelters/{proxyPath}:
+    summary: Shelters wildcard proxy
+    parameters:
+      - name: proxyPath
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      responses: { "200": { description: Success } }
+    delete:
+      responses: { "200": { description: Success } }
+
+  /health:
+    summary: Health check proxy
+    get:
+      responses: { "200": { description: Success } }
+components:
+  schemas: {}

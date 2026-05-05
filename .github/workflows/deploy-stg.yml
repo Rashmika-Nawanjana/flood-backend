@@ -98,14 +98,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set lowercase repository name
+        run: |
+          echo "REPO_LOWER=$(echo \"$GITHUB_REPOSITORY\" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
       - name: Build and push API image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/api:latest
-            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/api:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/api:latest
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/api:${{ env.IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -115,8 +119,8 @@ jobs:
           context: ./sensor-service
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/sensor-service:latest
-            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/sensor-service:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/sensor-service:latest
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/sensor-service:${{ env.IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -126,8 +130,8 @@ jobs:
           context: ./intelligence-service
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/intelligence-service:latest
-            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/intelligence-service:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/intelligence-service:latest
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/intelligence-service:${{ env.IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -137,8 +141,8 @@ jobs:
           context: ./zone-service
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/zone-service:latest
-            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/zone-service:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/zone-service:latest
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/zone-service:${{ env.IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -148,8 +152,8 @@ jobs:
           context: ./mqtt-kafka-service
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/mqtt-kafka-bridge:latest
-            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/mqtt-kafka-bridge:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/mqtt-kafka-bridge:latest
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/mqtt-kafka-bridge:${{ env.IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -159,20 +163,20 @@ jobs:
           context: ./kafka-influx-service
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/kafka-influx-bridge:latest
-            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/kafka-influx-bridge:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/kafka-influx-bridge:latest
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/kafka-influx-bridge:${{ env.IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Output image tags
         id: images
         run: |
-          echo "api-image=${{ env.REGISTRY }}/${{ toLower(github.repository) }}/api:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
-          echo "sensor-image=${{ env.REGISTRY }}/${{ toLower(github.repository) }}/sensor-service:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
-          echo "intelligence-image=${{ env.REGISTRY }}/${{ toLower(github.repository) }}/intelligence-service:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
-          echo "zone-image=${{ env.REGISTRY }}/${{ toLower(github.repository) }}/zone-service:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
-          echo "mqtt-kafka-image=${{ env.REGISTRY }}/${{ toLower(github.repository) }}/mqtt-kafka-bridge:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
-          echo "kafka-influx-image=${{ env.REGISTRY }}/${{ toLower(github.repository) }}/kafka-influx-bridge:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "api-image=${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/api:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "sensor-image=${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/sensor-service:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "intelligence-image=${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/intelligence-service:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "zone-image=${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/zone-service:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "mqtt-kafka-image=${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/mqtt-kafka-bridge:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "kafka-influx-image=${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/kafka-influx-bridge:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
 
   deploy:
     name: Deploy to Digital Ocean

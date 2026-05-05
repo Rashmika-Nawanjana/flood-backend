@@ -95,6 +95,18 @@ services:
       - "${INFLUXDB_PORT:-8086}:8086"
     volumes:
       - influx_data:/var/lib/influxdb2
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@floodsense.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
@@ -150,7 +162,9 @@ services:
       - kafka
       - influxdb
     restart: unless-stopped
+>>>>>>> origin/dev
 
 volumes:
   pg_data:
   influx_data:
+  pgadmin_data:

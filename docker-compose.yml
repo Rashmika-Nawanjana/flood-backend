@@ -95,8 +95,10 @@ services:
       - "${INFLUXDB_PORT:-8086}:8086"
     volumes:
       - influx_data:/var/lib/influxdb2
+
   pgadmin:
     image: dpage/pgadmin4:latest
+    container_name: flood-pgadmin
     restart: unless-stopped
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@floodsense.com
@@ -162,7 +164,6 @@ services:
       - kafka
       - influxdb
     restart: unless-stopped
->>>>>>> origin/dev
 
 volumes:
   pg_data:

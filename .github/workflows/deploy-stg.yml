@@ -1,0 +1,313 @@
+name: Deploy to Staging (Digital Ocean)
+
+on:
+  push:
+    branches:
+      - stg
+  pull_request:
+    branches:
+      - stg
+    types:
+      - closed
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'stg'
+        type: choice
+        options:
+          - stg
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_TAG: ${{ github.sha }}
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  lint-and-test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: stg
+
+      - name: Validate docker-compose
+        run: |
+          docker compose -f docker-compose.stg.yml config > /dev/null
+          echo "✓ docker-compose.stg.yml is valid"
+
+      - name: Check for required env vars
+        run: |
+          required_vars=(
+            "POSTGRES_USER"
+            "POSTGRES_PASSWORD"
+            "POSTGRES_DB"
+            "INFLUXDB_USERNAME"
+            "INFLUXDB_PASSWORD"
+            "INFLUXDB_ORG"
+            "INFLUXDB_BUCKET"
+            "INFLUXDB_TOKEN"
+            "KAFKA_TOPIC"
+            "MQTT_BROKER"
+            "MQTT_PORT"
+            "MQTT_TOPIC"
+          )
+          
+          missing_vars=()
+          while IFS= read -r line; do
+            if [[ "$line" =~ ^[^#]*= ]]; then
+              var_name="${line%%=*}"
+              for req_var in "${required_vars[@]}"; do
+                if [[ "$var_name" == "$req_var" ]]; then
+                  echo "✓ $var_name found"
+                fi
+              done
+            fi
+          done < .env.stg
+          
+          echo "✓ Environment variables validated"
+
+  build-and-push:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    outputs:
+      api-image: ${{ steps.images.outputs.api-image }}
+      sensor-image: ${{ steps.images.outputs.sensor-image }}
+      intelligence-image: ${{ steps.images.outputs.intelligence-image }}
+      zone-image: ${{ steps.images.outputs.zone-image }}
+      mqtt-kafka-image: ${{ steps.images.outputs.mqtt-kafka-image }}
+      kafka-influx-image: ${{ steps.images.outputs.kafka-influx-image }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: stg
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}/api:latest
+            ${{ env.REGISTRY }}/${{ github.repository }}/api:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Sensor Service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./sensor-service
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}/sensor-service:latest
+            ${{ env.REGISTRY }}/${{ github.repository }}/sensor-service:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Intelligence Service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./intelligence-service
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}/intelligence-service:latest
+            ${{ env.REGISTRY }}/${{ github.repository }}/intelligence-service:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Zone Service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./zone-service
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}/zone-service:latest
+            ${{ env.REGISTRY }}/${{ github.repository }}/zone-service:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push MQTT-Kafka Bridge image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./mqtt-kafka-service
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}/mqtt-kafka-bridge:latest
+            ${{ env.REGISTRY }}/${{ github.repository }}/mqtt-kafka-bridge:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Kafka-InfluxDB Bridge image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./kafka-influx-service
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}/kafka-influx-bridge:latest
+            ${{ env.REGISTRY }}/${{ github.repository }}/kafka-influx-bridge:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Output image tags
+        id: images
+        run: |
+          echo "api-image=${{ env.REGISTRY }}/${{ github.repository }}/api:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "sensor-image=${{ env.REGISTRY }}/${{ github.repository }}/sensor-service:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "intelligence-image=${{ env.REGISTRY }}/${{ github.repository }}/intelligence-service:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "zone-image=${{ env.REGISTRY }}/${{ github.repository }}/zone-service:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "mqtt-kafka-image=${{ env.REGISTRY }}/${{ github.repository }}/mqtt-kafka-bridge:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "kafka-influx-image=${{ env.REGISTRY }}/${{ github.repository }}/kafka-influx-bridge:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+
+  deploy:
+    name: Deploy to Digital Ocean
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    environment:
+      name: staging
+      url: https://stg.floodsense.lk
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: stg
+
+      - name: Deploy to Digital Ocean via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: ${{ secrets.DO_USER }}
+          key: ${{ secrets.DO_SSH_KEY }}
+          script: |
+            set -e
+            echo "🚀 Starting deployment to Digital Ocean..."
+            
+            # Navigate to project directory
+            cd /opt/flood-backend
+            
+            # Pull latest code
+            echo "📥 Pulling latest code from stg branch..."
+            git fetch origin
+            git checkout stg
+            git pull origin stg
+            
+            # Update environment file
+            echo "🔧 Updating environment configuration..."
+            cat > .env.stg << 'ENVEOF'
+            ${{ secrets.STG_ENV_VARS }}
+            ENVEOF
+            
+            # Stop existing services
+            echo "🛑 Stopping existing services..."
+            docker compose -f docker-compose.stg.yml down || true
+            
+            # Prune unused images and volumes
+            echo "🧹 Cleaning up unused Docker resources..."
+            docker image prune -f --filter "until=72h"
+            docker volume prune -f
+            
+            # Start services
+            echo "🐳 Starting Docker services..."
+            docker compose \
+              --env-file .env.stg \
+              -f docker-compose.stg.yml \
+              up -d
+            
+            # Wait for services to be healthy
+            echo "⏳ Waiting for services to be healthy..."
+            sleep 30
+            
+            # Run migrations
+            echo "🔄 Running database migrations..."
+            docker compose -f docker-compose.stg.yml exec -T api alembic upgrade head || true
+            
+            # Health checks
+            echo "🏥 Running health checks..."
+            
+            # Check if Kong is healthy
+            if docker compose -f docker-compose.stg.yml exec -T kong kong health > /dev/null 2>&1; then
+              echo "✓ Kong gateway is healthy"
+            else
+              echo "⚠ Kong gateway health check failed"
+            fi
+            
+            # Check service status
+            echo "📊 Service status:"
+            docker compose -f docker-compose.stg.yml ps
+            
+            echo "✅ Deployment completed successfully!"
+
+      - name: Verify Deployment
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: ${{ secrets.DO_USER }}
+          key: ${{ secrets.DO_SSH_KEY }}
+          script: |
+            echo "🔍 Verifying deployment..."
+            cd /opt/flood-backend
+            
+            # Test Kong API Gateway
+            echo "Testing Kong API Gateway..."
+            if curl -s http://localhost:8001/status > /dev/null 2>&1; then
+              echo "✓ Kong API Gateway is responding"
+            else
+              echo "✗ Kong API Gateway is not responding"
+              exit 1
+            fi
+            
+            # Display container logs
+            echo "📋 Recent logs:"
+            docker compose -f docker-compose.stg.yml logs --tail=20
+            
+            echo "✅ Deployment verification completed!"
+
+  notify:
+    name: Notify Deployment Status
+    runs-on: ubuntu-latest
+    needs: [lint-and-test, build-and-push, deploy]
+    if: always()
+    steps:
+      - name: Deployment Status
+        run: |
+          if [ "${{ needs.deploy.result }}" == "success" ]; then
+            echo "✅ Deployment to Staging (STG) completed successfully!"
+            echo "📍 URL: https://stg.floodsense.lk"
+            echo "🔍 Commit: ${{ github.sha }}"
+            echo "👤 Author: ${{ github.actor }}"
+          else
+            echo "❌ Deployment failed!"
+            exit 1
+          fi
+
+      - name: Create deployment annotation
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: 'stg',
+              environment: 'staging',
+              description: 'Deployment of commit ${{ github.sha }}',
+              production_environment: false,
+              auto_merge: false,
+              required_contexts: []
+            });

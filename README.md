@@ -77,6 +77,24 @@ curl http://localhost:8000/api/ping
 curl http://localhost:8000/health
 ```
 
+## Clerk auth and ngrok
+
+For local development, the backend expects Clerk JWT verification and webhook delivery to be enabled through these env vars in [`.env`](.env):
+
+```bash
+CLERK_JWKS_URL=https://useful-hen-13.clerk.accounts.dev/.well-known/jwks.json
+CLERK_ISSUER=https://useful-hen-13.clerk.accounts.dev
+CLERK_WEBHOOK_SECRET=whsec_...
+```
+
+Use [ngrok.yml](ngrok.yml) to expose the backend on the public URL shown in that file, then configure the Clerk webhook target as:
+
+```text
+https://revenge-crank-bobcat.ngrok-free.dev/v1/webhooks/clerk
+```
+
+For hosted deployment, keep the same Clerk webhook verification env vars but point Clerk at your hosted backend URL instead of ngrok. If your frontend is hosted on a different domain, update `FRONTEND_URL` and `ALLOWED_ORIGINS` accordingly.
+
 ## Health check
 
 ```bash

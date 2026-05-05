@@ -130,7 +130,7 @@ chmod +x deploy-stg.sh
 POSTGRES_PASSWORD_STG=<strong-password>
 INFLUXDB_PASSWORD_STG=<strong-password>
 INFLUXDB_TOKEN_STG=<generated-token>
-CLERK_WEBHOOK_SECRET_STG=<webhook-secret>
+CLERK_WEBHOOK_SECRET_STG=whsec_cWDXe4c0zOkTVt5P0uDkPBo2AwrfPPfz
 MQTT_BROKER_HOST=<mqtt-host>
 MQTT_USERNAME_STG=<mqtt-user>
 MQTT_PASSWORD_STG=<mqtt-password>

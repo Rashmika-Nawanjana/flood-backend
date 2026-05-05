@@ -104,8 +104,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository }}/api:latest
-            ${{ env.REGISTRY }}/${{ github.repository }}/api:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/api:latest
+            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/api:${{ env.IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -115,8 +115,8 @@ jobs:
           context: ./sensor-service
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository }}/sensor-service:latest
-            ${{ env.REGISTRY }}/${{ github.repository }}/sensor-service:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/sensor-service:latest
+            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/sensor-service:${{ env.IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -126,8 +126,8 @@ jobs:
           context: ./intelligence-service
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository }}/intelligence-service:latest
-            ${{ env.REGISTRY }}/${{ github.repository }}/intelligence-service:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/intelligence-service:latest
+            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/intelligence-service:${{ env.IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -137,8 +137,8 @@ jobs:
           context: ./zone-service
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository }}/zone-service:latest
-            ${{ env.REGISTRY }}/${{ github.repository }}/zone-service:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/zone-service:latest
+            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/zone-service:${{ env.IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -148,8 +148,8 @@ jobs:
           context: ./mqtt-kafka-service
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository }}/mqtt-kafka-bridge:latest
-            ${{ env.REGISTRY }}/${{ github.repository }}/mqtt-kafka-bridge:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/mqtt-kafka-bridge:latest
+            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/mqtt-kafka-bridge:${{ env.IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -159,20 +159,20 @@ jobs:
           context: ./kafka-influx-service
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository }}/kafka-influx-bridge:latest
-            ${{ env.REGISTRY }}/${{ github.repository }}/kafka-influx-bridge:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/kafka-influx-bridge:latest
+            ${{ env.REGISTRY }}/${{ toLower(github.repository) }}/kafka-influx-bridge:${{ env.IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Output image tags
         id: images
         run: |
-          echo "api-image=${{ env.REGISTRY }}/${{ github.repository }}/api:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
-          echo "sensor-image=${{ env.REGISTRY }}/${{ github.repository }}/sensor-service:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
-          echo "intelligence-image=${{ env.REGISTRY }}/${{ github.repository }}/intelligence-service:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
-          echo "zone-image=${{ env.REGISTRY }}/${{ github.repository }}/zone-service:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
-          echo "mqtt-kafka-image=${{ env.REGISTRY }}/${{ github.repository }}/mqtt-kafka-bridge:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
-          echo "kafka-influx-image=${{ env.REGISTRY }}/${{ github.repository }}/kafka-influx-bridge:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "api-image=${{ env.REGISTRY }}/${{ toLower(github.repository) }}/api:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "sensor-image=${{ env.REGISTRY }}/${{ toLower(github.repository) }}/sensor-service:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "intelligence-image=${{ env.REGISTRY }}/${{ toLower(github.repository) }}/intelligence-service:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "zone-image=${{ env.REGISTRY }}/${{ toLower(github.repository) }}/zone-service:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "mqtt-kafka-image=${{ env.REGISTRY }}/${{ toLower(github.repository) }}/mqtt-kafka-bridge:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "kafka-influx-image=${{ env.REGISTRY }}/${{ toLower(github.repository) }}/kafka-influx-bridge:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
 
   deploy:
     name: Deploy to Digital Ocean
@@ -209,9 +209,29 @@ jobs:
             
             # Update environment file
             echo "🔧 Updating environment configuration..."
+            # Write full env bundle if provided
             cat > .env.stg << 'ENVEOF'
             ${{ secrets.STG_ENV_VARS }}
             ENVEOF
+
+            # Append individual secrets if provided and not already present
+            if [ -n "${{ secrets.CLERK_WEBHOOK_SECRET_STG }}" ]; then
+              if ! grep -q '^CLERK_WEBHOOK_SECRET=' .env.stg 2>/dev/null; then
+                echo "CLERK_WEBHOOK_SECRET=${{ secrets.CLERK_WEBHOOK_SECRET_STG }}" >> .env.stg
+              fi
+            fi
+
+            if [ -n "${{ secrets.FRONTEND_URL_STG }}" ]; then
+              if ! grep -q '^FRONTEND_URL=' .env.stg 2>/dev/null; then
+                echo "FRONTEND_URL=${{ secrets.FRONTEND_URL_STG }}" >> .env.stg
+              fi
+            fi
+
+            if [ -n "${{ secrets.ALLOWED_ORIGINS_STG }}" ]; then
+              if ! grep -q '^ALLOWED_ORIGINS=' .env.stg 2>/dev/null; then
+                echo "ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS_STG }}" >> .env.stg
+              fi
+            fi
             
             # Stop existing services
             echo "🛑 Stopping existing services..."

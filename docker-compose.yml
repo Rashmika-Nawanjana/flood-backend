@@ -47,6 +47,22 @@ services:
       - postgres
       - influxdb
 
+  socket-service:
+    build: ./socket-service
+    container_name: flood-socket-service
+    ports:
+      - "${SOCKET_PORT:-3001}:3001"
+    environment:
+      PORT: 3001
+      SOCKET_PATH: /ws/live
+      CORS_ORIGIN: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      KAFKA_URL: ws://kafka-broker:19092
+      CLERK_JWKS_URL: ${CLERK_JWKS_URL:-}
+      CLERK_ISSUER: ${CLERK_ISSUER:-}
+      ZONE_SERVICE_URL: http://zone-service:8004
+    depends_on:
+      - zone-service
+
   kong:
     image: kong:3.4
     container_name: flood-kong

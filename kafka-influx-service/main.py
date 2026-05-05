@@ -2,11 +2,13 @@ import os
 import json
 import time
 import logging
-from kafka import KafkaConsumer
+from kafka import KafkaConsumer, KafkaProducer
 from kafka.errors import NoBrokersAvailable, KafkaError
 from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
 from datetime import datetime, timezone
+import numpy as np
+from typing import Dict, List
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
@@ -19,9 +21,65 @@ def _required_env(name: str) -> str:
     return value
 
 
+class AnomalyDetector:
+    """Statistical anomaly detector using Z-score method."""
+
+    def __init__(self, history_size: int = 10, z_threshold: float = 3.0):
+        self.history_size = history_size
+        self.z_threshold = z_threshold
+        self.recent_readings: Dict[str, List[float]] = {}
+
+    def is_anomaly(self, sensor_id: str, new_value: float) -> bool:
+        """
+        Detect if sensor reading is a statistical anomaly using Z-score.
+        
+        Args:
+            sensor_id: Unique sensor identifier
+            new_value: New water level reading (cm)
+            
+        Returns:
+            True if anomalous, False otherwise
+        """
+        if sensor_id not in self.recent_readings:
+            self.recent_readings[sensor_id] = []
+
+        history = self.recent_readings[sensor_id]
+
+        # Need at least 5 data points to establish baseline
+        if len(history) < 5:
+            history.append(new_value)
+            return False
+
+        # Calculate Z-score
+        mean = np.mean(history)
+        std_dev = np.std(history)
+        z_score = abs(new_value - mean) / (std_dev + 1e-5)
+
+        logger.debug(
+            f"Sensor {sensor_id}: value={new_value:.1f}cm, mean={mean:.1f}, "
+            f"std={std_dev:.2f}, z-score={z_score:.2f}"
+        )
+
+        # Z > 3 indicates anomaly (99.7% confidence)
+        if z_score > self.z_threshold:
+            logger.warning(
+                f"🚨 ANOMALY: Sensor {sensor_id} reading {new_value}cm "
+                f"(z-score: {z_score:.2f})"
+            )
+            return True
+
+        # Update history for normal readings
+        history.append(new_value)
+        if len(history) > self.history_size:
+            history.pop(0)
+
+        return False
+
+
 # Configuration
 KAFKA_BROKER = _required_env("KAFKA_BROKER")
 KAFKA_TOPIC = _required_env("KAFKA_TOPIC")
+ALERTS_TOPIC = os.getenv("ANOMALY_DETECTOR_OUTPUT_TOPIC", "system.alerts")
 
 INFLUXDB_URL = _required_env("INFLUXDB_URL")
 INFLUXDB_TOKEN = _required_env("INFLUXDB_TOKEN")
@@ -80,43 +138,74 @@ def validate_payload(data):
         return False
     return True
 
-def process_message(data, write_api):
-    """Convert Kafka message to InfluxDB point"""
+def process_message(data, write_api, detector, alert_producer):
+    """
+    Process Kafka message: validate, check for anomalies, then write to InfluxDB.
+    
+    Flow:
+    1. Validate payload
+    2. Check for anomalies using Z-score method
+    3. If anomaly: publish alert to system.alerts, skip InfluxDB write
+    4. If clean: write to InfluxDB
+    """
     try:
         # Validate payload
         if not validate_payload(data):
             logger.warning(f"Skipped invalid payload: {data}")
             return False
 
-        # Use provided timestamp or current time (in nanoseconds)
-        timestamp = data.get('timestamp', int(time.time() * 1e9))
+        device_id = data['device_id']
+        water_level = float(data['water_level_cm'])
 
-        # Create InfluxDB point
+        # Check for anomalies
+        if detector.is_anomaly(device_id, water_level):
+            # Publish anomaly alert
+            anomaly_event = {
+                "event": "anomaly:new",
+                "timestamp": int(time.time()),
+                "data": {
+                    "sensor_id": device_id,
+                    "type": "SUDDEN_SPIKE",
+                    "severity": "HIGH",
+                    "water_level_cm": water_level,
+                    "description": f"Impossible water level jump detected: {water_level}cm. Data discarded.",
+                }
+            }
+            try:
+                alert_producer.send(ALERTS_TOPIC, anomaly_event)
+                logger.info(f"[Anomaly Alert] ✅ Published to {ALERTS_TOPIC}: {device_id}")
+            except Exception as e:
+                logger.error(f"Failed to send anomaly alert: {e}")
+            return False  # Do NOT write anomalous data to InfluxDB
+
+        # Data is clean - write to InfluxDB
+        timestamp = data.get('timestamp', int(time.time() * 1e9))
         point = Point("flood_measurements") \
-            .tag("device_id", data['device_id']) \
-            .field("water_level_cm", float(data['water_level_cm'])) \
+            .tag("device_id", device_id) \
+            .field("water_level_cm", water_level) \
             .field("temperature", float(data['temperature'])) \
             .field("pressure", float(data['pressure'])) \
             .time(timestamp)
 
-        # Write to InfluxDB
         write_api.write(bucket=INFLUXDB_BUCKET, record=point)
-        logger.info(f"[Kafka→InfluxDB] ✅ {data['device_id']} | Water: {data['water_level_cm']}cm | Temp: {data['temperature']}°C")
+        logger.info(f"[Kafka→InfluxDB] ✅ {device_id} | Water: {water_level}cm | Temp: {data['temperature']}°C")
         return True
     except ValueError as e:
         logger.error(f"Value conversion error: {e} for payload {data}")
         return False
     except Exception as e:
-        logger.error(f"Error writing to InfluxDB: {e}")
+        logger.error(f"Error processing message: {e}")
         return False
 
 def main():
     logger.info("=" * 60)
-    logger.info("🌊 KAFKA → INFLUXDB BRIDGE SERVICE")
+    logger.info("🌊 KAFKA → INFLUXDB BRIDGE SERVICE (with Anomaly Detection)")
     logger.info(f"   Kafka:     {KAFKA_BROKER}")
+    logger.info(f"   Topic:     {KAFKA_TOPIC}")
     logger.info(f"   InfluxDB:  {INFLUXDB_URL}")
     logger.info(f"   Org:       {INFLUXDB_ORG}")
     logger.info(f"   Bucket:    {INFLUXDB_BUCKET}")
+    logger.info(f"   Alerts to: {ALERTS_TOPIC}")
     logger.info("=" * 60)
 
     # Wait for services
@@ -133,15 +222,26 @@ def main():
         influx_client = InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
         write_api = influx_client.write_api(write_options=SYNCHRONOUS)
         logger.info("✅ InfluxDB client initialized")
+        
+        alert_producer = KafkaProducer(
+            bootstrap_servers=KAFKA_BROKER,
+            value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+            acks='all',
+        )
+        logger.info("✅ Kafka producer (for alerts) initialized")
     except Exception as e:
-        logger.error(f"Failed to initialize InfluxDB client: {e}")
+        logger.error(f"Failed to initialize clients: {e}")
         return 1
+
+    # Initialize anomaly detector
+    detector = AnomalyDetector(history_size=10, z_threshold=3.0)
+    logger.info("✅ Anomaly detector initialized")
 
     retry_count = 0
     max_retries = 10
     
     logger.info("✅ Pipeline started!")
-    logger.info("   Kafka → InfluxDB bridge active...")
+    logger.info("   Kafka → [Anomaly Check] → InfluxDB bridge active...")
     logger.info("-" * 60)
 
     while True:
@@ -153,7 +253,7 @@ def main():
             for message in consumer:
                 try:
                     data = message.value
-                    process_message(data, write_api)
+                    process_message(data, write_api, detector, alert_producer)
                 except KafkaError as e:
                     logger.error(f"Kafka error: {e}")
                 except Exception as e:

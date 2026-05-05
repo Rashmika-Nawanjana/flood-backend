@@ -156,6 +156,7 @@ services:
     environment:
       KAFKA_BROKER: kafka:9092
       KAFKA_TOPIC: ${KAFKA_TOPIC:-flood-sensor-data}
+      ANOMALY_DETECTOR_OUTPUT_TOPIC: system.alerts
       INFLUXDB_URL: http://influxdb:8086
       INFLUXDB_TOKEN: ${INFLUXDB_TOKEN:-my-super-secret-token-12345}
       INFLUXDB_ORG: ${INFLUXDB_ORG:-flood}

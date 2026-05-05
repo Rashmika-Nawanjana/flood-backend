@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends
 
-from app.api.routers import admin
-from app.auth.keycloak import get_current_user, require_roles
+from app.api.routers import admin, webhooks
+from app.auth.clerk import get_current_user, require_roles
 
 router = APIRouter(prefix="/api")
 
 # Admin control plane only; microservices routed via Kong
 router.include_router(admin.router)
+router.include_router(webhooks.router)
 
 
 @router.get("/ping", tags=["system"])
@@ -32,7 +33,7 @@ def admin_test(current_user: dict = Depends(require_roles(["admin"]))) -> dict:
 
 @router.get("/rbac/field-test", tags=["rbac"])
 def field_test(
-    current_user: dict = Depends(require_roles(["admin", "field_officer"]))
+    current_user: dict = Depends(require_roles(["admin", "field_officer"])),
 ) -> dict:
     return {
         "message": "Field officer access granted",
@@ -42,7 +43,7 @@ def field_test(
 
 @router.get("/rbac/citizen-test", tags=["rbac"])
 def citizen_test(
-    current_user: dict = Depends(require_roles(["admin", "field_officer", "citizen"]))
+    current_user: dict = Depends(require_roles(["admin", "field_officer", "citizen"])),
 ) -> dict:
     return {
         "message": "Citizen access granted",

@@ -3,8 +3,8 @@
 // Path: /public
 //
 // • No authentication required
-// • Receives only 4 events:
-//     zone:risk:update, prediction:new,
+// • Receives only 3 events:
+//     zone:risk:update, 
 //     alert:new, alert:resolved
 // • Zone determined by client GPS via
 //   subscribe:location { lat, lng }

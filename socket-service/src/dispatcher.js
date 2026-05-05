@@ -6,13 +6,12 @@
 // Access Matrix:
 //   Admin   → all 7 events, all zones (broadcast)
 //   Officer → all 7 events, own zone only (room)
-//   Public  → 4 events only, GPS zone only (room)
+//   Public  → 3 events only, GPS zone only (room)
 // =============================================
 
 // Events the public namespace is allowed to receive
 const PUBLIC_EVENTS = new Set([
   'zone:risk:update',
-  'prediction:new',
   'alert:new',
   'alert:resolved',
 ]);
@@ -53,7 +52,7 @@ function dispatch(eventName, payload, zoneId) {
     officerNsp.to(`zone:${zoneId}`).emit(eventName, payload);
   }
 
-  // ── Public: emit only 4 allowed events, to matching zone room ──
+  // ── Public: emit only 3 allowed events, to matching zone room ──
   if (publicNsp && PUBLIC_EVENTS.has(eventName) && zoneId) {
     publicNsp.to(`zone:${zoneId}`).emit(eventName, payload);
   }

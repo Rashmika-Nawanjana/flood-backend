@@ -51,7 +51,7 @@ jobs:
 
       - name: Validate docker-compose
         run: |
-          docker compose -f docker-compose.stg.yml config > /dev/null
+          docker compose --env-file .env.stg -f docker-compose.stg.yml config > /dev/null
           echo "✓ docker-compose.stg.yml is valid"
 
       - name: Check for required env vars
@@ -239,14 +239,26 @@ jobs:
             # Remove .env.stg from git tracking (if it was ever committed)
             git rm --cached .env.stg 2>/dev/null || true
             
+            # Back up existing env file before attempting overwrite
+            if [ -s .env.stg ]; then
+              cp .env.stg .env.stg.bak
+              echo "✓ Backed up existing .env.stg"
+            fi
+
             # Write full env bundle if provided
             cat > .env.stg << 'ENVEOF'
             ${{ secrets.STG_ENV_VARS }}
             ENVEOF
 
             if [ ! -s .env.stg ]; then
-              echo "STG_ENV_VARS secret is missing or empty; aborting deployment"
-              exit 1
+              echo "⚠ STG_ENV_VARS secret is empty"
+              if [ -s .env.stg.bak ]; then
+                echo "✓ Restoring from backup .env.stg.bak"
+                cp .env.stg.bak .env.stg
+              else
+                echo "❌ No backup found either; aborting deployment"
+                exit 1
+              fi
             fi
 
             # Append individual secrets if provided and not already present
@@ -270,7 +282,7 @@ jobs:
             
             # Stop existing services
             echo "🛑 Stopping existing services..."
-            docker compose -f docker-compose.stg.yml down || true
+            docker compose --env-file .env.stg -f docker-compose.stg.yml down || true
             
             # Prune unused images and volumes
             echo "🧹 Cleaning up unused Docker resources..."
@@ -290,13 +302,13 @@ jobs:
             
             # Run migrations
             echo "🔄 Running database migrations..."
-            docker compose -f docker-compose.stg.yml exec -T api alembic upgrade head || true
+            docker compose --env-file .env.stg -f docker-compose.stg.yml exec -T api alembic upgrade head || true
             
             # Health checks
             echo "🏥 Running health checks..."
             
             # Check if Kong is healthy
-            if docker compose -f docker-compose.stg.yml exec -T kong kong health > /dev/null 2>&1; then
+            if docker compose --env-file .env.stg -f docker-compose.stg.yml exec -T kong kong health > /dev/null 2>&1; then
               echo "✓ Kong gateway is healthy"
             else
               echo "⚠ Kong gateway health check failed"
@@ -304,7 +316,7 @@ jobs:
             
             # Check service status
             echo "📊 Service status:"
-            docker compose -f docker-compose.stg.yml ps
+            docker compose --env-file .env.stg -f docker-compose.stg.yml ps
             
             echo "✅ Deployment completed successfully!"
 
@@ -336,7 +348,7 @@ jobs:
             
             # Display container logs
             echo "📋 Recent logs:"
-            docker compose -f docker-compose.stg.yml logs --tail=20
+            docker compose --env-file .env.stg -f docker-compose.stg.yml logs --tail=20
             
             echo "✅ Deployment verification completed!"
 

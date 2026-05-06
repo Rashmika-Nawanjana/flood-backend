@@ -67,7 +67,7 @@ jobs:
               
               restart)
                 echo "🔄 Restarting services..."
-                docker compose -f docker-compose.stg.yml restart
+                docker compose --env-file .env.stg -f docker-compose.stg.yml restart
                 sleep 10
                 echo "✅ Services restarted"
                 ;;
@@ -79,13 +79,13 @@ jobs:
                 curl -s http://localhost:8001/status | jq '.' || echo "Kong is not responding"
                 echo ""
                 echo "Service Status:"
-                docker compose -f docker-compose.stg.yml ps
+                docker compose --env-file .env.stg -f docker-compose.stg.yml ps
                 ;;
             esac
             
             echo ""
             echo "📊 Current deployment state:"
-            docker compose -f docker-compose.stg.yml ps
+            docker compose --env-file .env.stg -f docker-compose.stg.yml ps
 
   notify:
     name: Notify Action Result

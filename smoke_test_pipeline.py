@@ -39,17 +39,31 @@ def test_kafka_producer():
         # Format expected by kafka-influx-service
         test_msg_1 = {
             "device_id": "MR-KND-101",
+            "timestamp": "2026-04-21 14:36:12",
+            "temperature": 22.5,
+            "pressure": 1013.25,
             "water_level_cm": 250.0,  # 2.5 meters
-            "temperature": 22.5,       # Celsius
-            "pressure": 1013.25        # hPa
+            "rainfall_intensity_mmh": 12.5,
+            "flow_velocity_ms": 1.8,
+            "device_status": {
+                "battery_voltage": 3.9,
+                "signal_strength_dbm": -68,
+            },
         }
         
         # Test message 2: Another device
         test_msg_2 = {
             "device_id": "SENSOR-TEST-002",
+            "timestamp": "2026-04-21 14:37:12",
             "water_level_cm": 180.5,
             "temperature": 23.1,
-            "pressure": 1013.30
+            "pressure": 1013.30,
+            "rainfall_intensity_mmh": 4.2,
+            "flow_velocity_ms": 1.2,
+            "device_status": {
+                "battery_voltage": 3.8,
+                "signal_strength_dbm": -71,
+            },
         }
         
         logger.info(f"Publishing message 1: {test_msg_1}")

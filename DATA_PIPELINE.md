@@ -20,7 +20,7 @@ MQTT Sensors
 - **Purpose**: Bridge MQTT sensors to Kafka
 - **Features**:
   - Subscribes to `MQTT_TOPIC` (default: `flood/sensors/#`)
-  - Validates payload schema (required: `device_id`, `water_level_cm`, `temperature`, `pressure`)
+  - Validates the MQTT telemetry schema before forwarding
   - Batches messages for throughput (16KB batches, 100ms window)
   - Automatic reconnection on MQTT disconnect
   - Thread-safe producer with lock
@@ -36,12 +36,14 @@ MQTT Sensors
 - **Features**:
   - Consumes from Kafka topic with consumer groups
   - Validates schema before write
+  - Runs anomaly detection before persistence
+  - Publishes anomaly alerts to Kafka (`system.alerts`)
   - Type conversion with error handling
   - Automatic reconnection on Kafka/InfluxDB failures
   - No consumer timeout (runs indefinitely)
   - Measurement: `flood_measurements`
   - Tags: `device_id`
-  - Fields: `water_level_cm`, `temperature`, `pressure`
+  - Fields: `water_level_cm`, `temperature`, `pressure`, `rainfall_intensity_mmh`, `flow_velocity_ms`, `battery_voltage`, `signal_strength_dbm`
 - **Environment Variables**:
   - `KAFKA_BROKER` (default: `localhost:9092`)
   - `INFLUXDB_URL` (default: `http://localhost:8086`)
@@ -92,7 +94,7 @@ python main.py
 ### Send Mock MQTT Message:
 
 ```bash
-docker exec -it flood-mosquitto sh -lc 'mosquitto_pub -h localhost -t flood/sensors/sensor-1 -m "{\"device_id\":\"sensor-1\",\"water_level_cm\":45.2,\"temperature\":28.5,\"pressure\":1013.25,\"timestamp\":1714780800000000000}"'
+docker exec -it flood-mosquitto sh -lc 'mosquitto_pub -h localhost -t flood/sensors/sensor-1 -m "{\"device_id\":\"NODE_01\",\"timestamp\":\"2026-04-21 14:36:12\",\"temperature\":28.50,\"pressure\":1011.25,\"water_level_cm\":45.32,\"rainfall_intensity_mmh\":12.5,\"flow_velocity_ms\":1.8,\"device_status\":{\"battery_voltage\":3.9,\"signal_strength_dbm\":-68}}"'
 ```
 
 If you are running the command directly in Windows `cmd`, use double quotes outside the JSON payload and single quotes are not treated as quoting characters.
@@ -108,16 +110,22 @@ docker exec flood-influxdb influx query --org flood --token my-super-secret-toke
 Expected MQTT payload (JSON):
 ```json
 {
-  "device_id": "sensor-123",
-  "water_level_cm": 42.5,
-  "temperature": 27.3,
-  "pressure": 1012.8,
-  "timestamp": 1714780800000000000
+  "device_id": "NODE_01",
+  "timestamp": "2026-04-21 14:36:12",
+  "temperature": 28.5,
+  "pressure": 1011.25,
+  "water_level_cm": 45.32,
+  "rainfall_intensity_mmh": 12.5,
+  "flow_velocity_ms": 1.8,
+  "device_status": {
+    "battery_voltage": 3.9,
+    "signal_strength_dbm": -68
+  }
 }
 ```
 
-**Required Fields**: `device_id`, `water_level_cm`, `temperature`, `pressure`
-**Optional Fields**: `timestamp` (defaults to current time in nanoseconds)
+**Required Fields**: `device_id`, `timestamp`, `water_level_cm`, `temperature`, `pressure`, `rainfall_intensity_mmh`, `flow_velocity_ms`, `device_status.battery_voltage`, `device_status.signal_strength_dbm`
+**Optional Fields**: none for the current schema
 
 ## Error Handling
 

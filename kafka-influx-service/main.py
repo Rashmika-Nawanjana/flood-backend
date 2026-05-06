@@ -133,10 +133,41 @@ def create_consumer():
 
 def validate_payload(data):
     """Validate required fields in MQTT payload"""
-    required_fields = ['device_id', 'water_level_cm', 'temperature', 'pressure']
+    required_fields = [
+        'device_id',
+        'timestamp',
+        'water_level_cm',
+        'temperature',
+        'pressure',
+        'rainfall_intensity_mmh',
+        'flow_velocity_ms',
+        'device_status',
+    ]
     if not all(k in data for k in required_fields):
         return False
+    device_status = data.get('device_status')
+    if not isinstance(device_status, dict):
+        return False
+    if not all(k in device_status for k in ['battery_voltage', 'signal_strength_dbm']):
+        return False
     return True
+
+
+def parse_timestamp(timestamp_value):
+    """Convert the incoming timestamp string or numeric value into nanoseconds."""
+    if isinstance(timestamp_value, (int, float)):
+        return int(timestamp_value)
+
+    if isinstance(timestamp_value, str):
+        try:
+            parsed = datetime.strptime(timestamp_value, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            parsed = datetime.fromisoformat(timestamp_value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return int(parsed.timestamp() * 1e9)
+
+    raise ValueError(f"Unsupported timestamp value: {timestamp_value!r}")
 
 def process_message(data, write_api, detector, alert_producer):
     """
@@ -156,6 +187,8 @@ def process_message(data, write_api, detector, alert_producer):
 
         device_id = data['device_id']
         water_level = float(data['water_level_cm'])
+        timestamp = parse_timestamp(data['timestamp'])
+        device_status = data['device_status']
 
         # Check for anomalies
         if detector.is_anomaly(device_id, water_level):
@@ -168,6 +201,11 @@ def process_message(data, write_api, detector, alert_producer):
                     "type": "SUDDEN_SPIKE",
                     "severity": "HIGH",
                     "water_level_cm": water_level,
+                    "temperature": float(data['temperature']),
+                    "pressure": float(data['pressure']),
+                    "rainfall_intensity_mmh": float(data['rainfall_intensity_mmh']),
+                    "flow_velocity_ms": float(data['flow_velocity_ms']),
+                    "device_status": device_status,
                     "description": f"Impossible water level jump detected: {water_level}cm. Data discarded.",
                 }
             }
@@ -179,16 +217,22 @@ def process_message(data, write_api, detector, alert_producer):
             return False  # Do NOT write anomalous data to InfluxDB
 
         # Data is clean - write to InfluxDB
-        timestamp = data.get('timestamp', int(time.time() * 1e9))
         point = Point("flood_measurements") \
             .tag("device_id", device_id) \
             .field("water_level_cm", water_level) \
             .field("temperature", float(data['temperature'])) \
             .field("pressure", float(data['pressure'])) \
+            .field("rainfall_intensity_mmh", float(data['rainfall_intensity_mmh'])) \
+            .field("flow_velocity_ms", float(data['flow_velocity_ms'])) \
+            .field("battery_voltage", float(device_status['battery_voltage'])) \
+            .field("signal_strength_dbm", float(device_status['signal_strength_dbm'])) \
             .time(timestamp)
 
         write_api.write(bucket=INFLUXDB_BUCKET, record=point)
-        logger.info(f"[Kafka→InfluxDB] ✅ {device_id} | Water: {water_level}cm | Temp: {data['temperature']}°C")
+        logger.info(
+            f"[Kafka→InfluxDB] ✅ {device_id} | Water: {water_level}cm | Temp: {data['temperature']}°C | "
+            f"Rain: {data['rainfall_intensity_mmh']}mm/h | Flow: {data['flow_velocity_ms']}m/s"
+        )
         return True
     except ValueError as e:
         logger.error(f"Value conversion error: {e} for payload {data}")

@@ -42,53 +42,51 @@ jobs:
             ENV_SIZE=$(wc -c < .env.stg)
             if [ "$ENV_SIZE" -lt 5 ]; then
               echo "⚠ STG_ENV_VARS secret is empty. Creating default staging env..."
-              cat > .env.stg << 'DEFAULTENV'
-APP_NAME=Flood Backend - Staging
-APP_ENV=staging
-APP_HOST=0.0.0.0
-APP_PORT=8000
-APP_DEBUG=false
-LOG_LEVEL=info
-
-STAGING_DOMAIN=stg.floodsense.lk
-STAGING_URL=https://stg.floodsense.lk
-FRONTEND_URL=https://stg-flood-management.vercel.app
-ALLOWED_ORIGINS=https://stg-flood-management.vercel.app,https://stg-web.floodsense.lk,https://stg.floodsense.lk
-
-POSTGRES_USER=flood_stg_user
-POSTGRES_PASSWORD=flood_stg_pass_2026
-POSTGRES_DB=flooddb_stg
-DATABASE_URL=postgresql+psycopg://flood_stg_user:flood_stg_pass_2026@postgres:5432/flooddb_stg
-
-INFLUXDB_URL=http://influxdb:8086
-INFLUXDB_USERNAME=admin
-INFLUXDB_PASSWORD=influx_stg_pass_2026
-INFLUXDB_ORG=flood-staging
-INFLUXDB_BUCKET=telemetry-stg
-INFLUXDB_TOKEN=flood-stg-influx-token-2026
-INFLUXDB_PORT=8086
-INFLUXDB_HOST=influxdb
-
-CLERK_JWKS_URL=https://useful-hen-13.clerk.accounts.dev/.well-known/jwks.json
-CLERK_ISSUER=https://useful-hen-13.clerk.accounts.dev
-CLERK_WEBHOOK_SECRET=whsec_o5rQSebAXqdafDAWJuvayUyav1XaAAE7
-
-MQTT_BROKER=broker.hivemq.com
-MQTT_PORT=1883
-MQTT_TOPIC=flood/sensors/#
-MQTT_USERNAME=
-MQTT_PASSWORD=
-
-KAFKA_BROKER=kafka:9092
-KAFKA_TOPIC=flood-sensor-data
-KAFKA_SECURITY_PROTOCOL=PLAINTEXT
-
-SENSOR_OFFLINE_MINUTES=15
-LOG_FORMAT=json
-LOG_OUTPUT=stdout
-HEALTH_CHECK_INTERVAL=30
-HEALTH_CHECK_TIMEOUT=10
-DEFAULTENV
+              echo "APP_NAME=Flood Backend - Staging" > .env.stg
+              echo "APP_ENV=staging" >> .env.stg
+              echo "APP_HOST=0.0.0.0" >> .env.stg
+              echo "APP_PORT=8000" >> .env.stg
+              echo "APP_DEBUG=false" >> .env.stg
+              echo "LOG_LEVEL=info" >> .env.stg
+              echo "" >> .env.stg
+              echo "STAGING_DOMAIN=stg.floodsense.lk" >> .env.stg
+              echo "STAGING_URL=https://stg.floodsense.lk" >> .env.stg
+              echo "FRONTEND_URL=https://stg-flood-management.vercel.app" >> .env.stg
+              echo "ALLOWED_ORIGINS=https://stg-flood-management.vercel.app,https://stg-web.floodsense.lk,https://stg.floodsense.lk" >> .env.stg
+              echo "" >> .env.stg
+              echo "POSTGRES_USER=flood_stg_user" >> .env.stg
+              echo "POSTGRES_PASSWORD=flood_stg_pass_2026" >> .env.stg
+              echo "POSTGRES_DB=flooddb_stg" >> .env.stg
+              echo "DATABASE_URL=postgresql+psycopg://flood_stg_user:flood_stg_pass_2026@postgres:5432/flooddb_stg" >> .env.stg
+              echo "" >> .env.stg
+              echo "INFLUXDB_URL=http://influxdb:8086" >> .env.stg
+              echo "INFLUXDB_USERNAME=admin" >> .env.stg
+              echo "INFLUXDB_PASSWORD=influx_stg_pass_2026" >> .env.stg
+              echo "INFLUXDB_ORG=flood-staging" >> .env.stg
+              echo "INFLUXDB_BUCKET=telemetry-stg" >> .env.stg
+              echo "INFLUXDB_TOKEN=flood-stg-influx-token-2026" >> .env.stg
+              echo "INFLUXDB_PORT=8086" >> .env.stg
+              echo "INFLUXDB_HOST=influxdb" >> .env.stg
+              echo "" >> .env.stg
+              echo "CLERK_JWKS_URL=https://useful-hen-13.clerk.accounts.dev/.well-known/jwks.json" >> .env.stg
+              echo "CLERK_ISSUER=https://useful-hen-13.clerk.accounts.dev" >> .env.stg
+              echo "CLERK_WEBHOOK_SECRET=whsec_o5rQSebAXqdafDAWJuvayUyav1XaAAE7" >> .env.stg
+              echo "" >> .env.stg
+              echo "MQTT_BROKER=broker.hivemq.com" >> .env.stg
+              echo "MQTT_PORT=1883" >> .env.stg
+              echo "MQTT_TOPIC=flood/sensors/#" >> .env.stg
+              echo "MQTT_USERNAME=" >> .env.stg
+              echo "MQTT_PASSWORD=" >> .env.stg
+              echo "" >> .env.stg
+              echo "KAFKA_BROKER=kafka:9092" >> .env.stg
+              echo "KAFKA_TOPIC=flood-sensor-data" >> .env.stg
+              echo "KAFKA_SECURITY_PROTOCOL=PLAINTEXT" >> .env.stg
+              echo "" >> .env.stg
+              echo "SENSOR_OFFLINE_MINUTES=15" >> .env.stg
+              echo "LOG_FORMAT=json" >> .env.stg
+              echo "LOG_OUTPUT=stdout" >> .env.stg
+              echo "HEALTH_CHECK_INTERVAL=30" >> .env.stg
+              echo "HEALTH_CHECK_TIMEOUT=10" >> .env.stg
             fi
 
             ACTION="${{ github.event.inputs.action }}"

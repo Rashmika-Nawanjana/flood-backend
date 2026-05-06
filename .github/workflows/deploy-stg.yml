@@ -252,14 +252,54 @@ jobs:
 
             ENV_SIZE=$(wc -c < .env.stg)
             if [ "$ENV_SIZE" -lt 5 ]; then
-              echo "⚠ STG_ENV_VARS secret is empty (size: $ENV_SIZE bytes)"
-              if [ -s .env.stg.bak ]; then
-                echo "✓ Restoring from backup .env.stg.bak"
-                cp .env.stg.bak .env.stg
-              else
-                echo "❌ No backup found either; aborting deployment"
-                exit 1
-              fi
+              echo "⚠ STG_ENV_VARS secret is empty. Creating default staging env..."
+              cat > .env.stg << 'DEFAULTENV'
+APP_NAME=Flood Backend - Staging
+APP_ENV=staging
+APP_HOST=0.0.0.0
+APP_PORT=8000
+APP_DEBUG=false
+LOG_LEVEL=info
+
+STAGING_DOMAIN=stg.floodsense.lk
+STAGING_URL=https://stg.floodsense.lk
+FRONTEND_URL=https://stg-flood-management.vercel.app
+ALLOWED_ORIGINS=https://stg-flood-management.vercel.app,https://stg-web.floodsense.lk,https://stg.floodsense.lk
+
+POSTGRES_USER=flood_stg_user
+POSTGRES_PASSWORD=flood_stg_pass_2026
+POSTGRES_DB=flooddb_stg
+DATABASE_URL=postgresql+psycopg://flood_stg_user:flood_stg_pass_2026@postgres:5432/flooddb_stg
+
+INFLUXDB_URL=http://influxdb:8086
+INFLUXDB_USERNAME=admin
+INFLUXDB_PASSWORD=influx_stg_pass_2026
+INFLUXDB_ORG=flood-staging
+INFLUXDB_BUCKET=telemetry-stg
+INFLUXDB_TOKEN=flood-stg-influx-token-2026
+INFLUXDB_PORT=8086
+INFLUXDB_HOST=influxdb
+
+CLERK_JWKS_URL=https://useful-hen-13.clerk.accounts.dev/.well-known/jwks.json
+CLERK_ISSUER=https://useful-hen-13.clerk.accounts.dev
+CLERK_WEBHOOK_SECRET=whsec_o5rQSebAXqdafDAWJuvayUyav1XaAAE7
+
+MQTT_BROKER=broker.hivemq.com
+MQTT_PORT=1883
+MQTT_TOPIC=flood/sensors/#
+MQTT_USERNAME=
+MQTT_PASSWORD=
+
+KAFKA_BROKER=kafka:9092
+KAFKA_TOPIC=flood-sensor-data
+KAFKA_SECURITY_PROTOCOL=PLAINTEXT
+
+SENSOR_OFFLINE_MINUTES=15
+LOG_FORMAT=json
+LOG_OUTPUT=stdout
+HEALTH_CHECK_INTERVAL=30
+HEALTH_CHECK_TIMEOUT=10
+DEFAULTENV
             fi
 
             # Append individual secrets if provided and not already present

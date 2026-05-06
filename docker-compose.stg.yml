@@ -116,7 +116,7 @@ services:
           memory: 512M
 
   kong:
-    image: kong:3.4-alpine
+    image: kong:3.4
     container_name: flood-kong-stg
     depends_on:
       - api

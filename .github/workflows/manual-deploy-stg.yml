@@ -34,6 +34,16 @@ jobs:
           key: ${{ secrets.DO_SSH_KEY }}
           script: |
             cd /opt/flood-backend
+
+            cat > .env.stg << 'ENVEOF'
+            ${{ secrets.STG_ENV_VARS }}
+            ENVEOF
+
+            if [ ! -s .env.stg ]; then
+              echo "STG_ENV_VARS secret is missing or empty; aborting deployment"
+              exit 1
+            fi
+
             ACTION="${{ github.event.inputs.action }}"
             
             echo "🔨 Executing action: $ACTION"

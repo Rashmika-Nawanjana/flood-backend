@@ -38,6 +38,17 @@ jobs:
         with:
           ref: stg
 
+      - name: Materialize staging env file
+        run: |
+          cat > .env.stg << 'ENVEOF'
+          ${{ secrets.STG_ENV_VARS }}
+          ENVEOF
+
+          if [ ! -s .env.stg ]; then
+            echo "STG_ENV_VARS secret is missing or empty"
+            exit 1
+          fi
+
       - name: Validate docker-compose
         run: |
           docker compose -f docker-compose.stg.yml config > /dev/null
@@ -232,6 +243,11 @@ jobs:
             cat > .env.stg << 'ENVEOF'
             ${{ secrets.STG_ENV_VARS }}
             ENVEOF
+
+            if [ ! -s .env.stg ]; then
+              echo "STG_ENV_VARS secret is missing or empty; aborting deployment"
+              exit 1
+            fi
 
             # Append individual secrets if provided and not already present
             if [ -n "${{ secrets.CLERK_WEBHOOK_SECRET_STG }}" ]; then

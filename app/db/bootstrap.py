@@ -40,11 +40,22 @@ def wait_for_database() -> None:
 
 
 def run_migrations() -> None:
-    subprocess.run(
-        ["alembic", "-c", "/app/alembic.ini", "upgrade", "head"],
-        check=True,
-        cwd="/app",
-    )
+    try:
+        result = subprocess.run(
+            ["alembic", "-c", "/app/alembic.ini", "upgrade", "head"],
+            check=True,
+            cwd="/app",
+            capture_output=True,
+            text=True,
+        )
+        print(f"✅ Database migrations completed successfully", file=sys.stderr, flush=True)
+        if result.stdout:
+            print(result.stdout, file=sys.stderr, flush=True)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Migration failed with exit code {e.returncode}", file=sys.stderr, flush=True)
+        print(f"STDERR: {e.stderr}", file=sys.stderr, flush=True)
+        print(f"STDOUT: {e.stdout}", file=sys.stderr, flush=True)
+        sys.exit(1)
 
 
 def start_server() -> None:

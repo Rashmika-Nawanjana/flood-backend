@@ -2,7 +2,6 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException
-
 from app.services.zone_data import (
     fetch_zone,
     fetch_zone_shelters,

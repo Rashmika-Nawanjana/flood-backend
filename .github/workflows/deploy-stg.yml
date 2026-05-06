@@ -214,6 +214,9 @@ jobs:
             # Navigate to project directory
             cd /opt/flood-backend
             
+            # Stash any local changes (e.g., .env.stg from previous runs)
+            git stash || true
+            
             # Pull latest code
             echo "📥 Pulling latest code from stg branch..."
             git fetch origin
@@ -222,6 +225,9 @@ jobs:
             
             # Update environment file
             echo "🔧 Updating environment configuration..."
+            # Remove .env.stg from git tracking (if it was ever committed)
+            git rm --cached .env.stg 2>/dev/null || true
+            
             # Write full env bundle if provided
             cat > .env.stg << 'ENVEOF'
             ${{ secrets.STG_ENV_VARS }}

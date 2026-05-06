@@ -190,6 +190,10 @@ jobs:
     environment:
       name: staging
       url: https://stg.floodsense.lk
+    env:
+      DO_HOST: ${{ secrets.DO_HOST || vars.DO_HOST }}
+      DO_USER: ${{ secrets.DO_USER || vars.DO_USER }}
+      DO_SSH_KEY: ${{ secrets.DO_SSH_KEY || vars.DO_SSH_KEY }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -197,11 +201,12 @@ jobs:
           ref: stg
 
       - name: Deploy to Digital Ocean via SSH
+        if: env.DO_HOST != '' && env.DO_USER != '' && env.DO_SSH_KEY != ''
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.DO_HOST }}
-          username: ${{ secrets.DO_USER }}
-          key: ${{ secrets.DO_SSH_KEY }}
+          host: ${{ env.DO_HOST }}
+          username: ${{ env.DO_USER }}
+          key: ${{ env.DO_SSH_KEY }}
           script: |
             set -e
             echo "🚀 Starting deployment to Digital Ocean..."
@@ -281,12 +286,19 @@ jobs:
             
             echo "✅ Deployment completed successfully!"
 
+      - name: Fail when deployment connection details are missing
+        if: env.DO_HOST == '' || env.DO_USER == '' || env.DO_SSH_KEY == ''
+        run: |
+          echo "Missing Digital Ocean connection details. Set DO_HOST, DO_USER, and DO_SSH_KEY as repository secrets or environment variables for the staging environment."
+          exit 1
+
       - name: Verify Deployment
+        if: env.DO_HOST != '' && env.DO_USER != '' && env.DO_SSH_KEY != ''
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.DO_HOST }}
-          username: ${{ secrets.DO_USER }}
-          key: ${{ secrets.DO_SSH_KEY }}
+          host: ${{ env.DO_HOST }}
+          username: ${{ env.DO_USER }}
+          key: ${{ env.DO_SSH_KEY }}
           script: |
             echo "🔍 Verifying deployment..."
             cd /opt/flood-backend

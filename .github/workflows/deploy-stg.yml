@@ -250,8 +250,9 @@ jobs:
             ${{ secrets.STG_ENV_VARS }}
             ENVEOF
 
-            if [ ! -s .env.stg ]; then
-              echo "⚠ STG_ENV_VARS secret is empty"
+            ENV_SIZE=$(wc -c < .env.stg)
+            if [ "$ENV_SIZE" -lt 5 ]; then
+              echo "⚠ STG_ENV_VARS secret is empty (size: $ENV_SIZE bytes)"
               if [ -s .env.stg.bak ]; then
                 echo "✓ Restoring from backup .env.stg.bak"
                 cp .env.stg.bak .env.stg

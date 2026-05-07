@@ -1,121 +1,47 @@
 {
-  "__inputs": [],
-  "__requires": [],
-  "annotations": {
-    "list": [
-      {
-        "builtIn": 1,
-        "datasource": "-- Grafana --",
-        "enable": true,
-        "hide": true,
-        "iconColor": "rgba(0, 211, 255, 1)",
-        "name": "Annotations & Alerts",
-        "type": "dashboard"
-      }
-    ]
-  },
-  "editable": true,
-  "graphTooltip": 1,
-  "id": null,
+  "title": "Kafka Pipeline — MQTT → Kafka → Services",
+  "schemaVersion": 38,
+  "refresh": "5s",
   "panels": [
     {
-      "type": "row",
-      "title": "🟢 Kafka Health",
-      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 }
-    },
-    {
-      "type": "stat",
-      "title": "Kafka Exporter Up",
-      "datasource": "prometheus",
+      "type": "timeseries",
+      "title": "Kafka Messages In Rate",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 6 },
       "targets": [
         {
-          "expr": "up{job=\"kafka-exporter\"}"
+          "expr": "rate(kafka_topic_partition_current_offset{topic=\"flood-sensor-data\"}[1m])"
         }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [
-            {
-              "options": {
-                "0": { "text": "DOWN", "color": "red" },
-                "1": { "text": "UP", "color": "green" }
-              }
-            }
-          ],
-          "thresholds": {
-            "steps": [
-              { "color": "red", "value": 0 },
-              { "color": "green", "value": 1 }
-            ]
-          }
-        }
-      },
-      "gridPos": { "x": 0, "y": 1, "w": 6, "h": 4 }
+      ]
     },
     {
       "type": "timeseries",
-      "title": "Topic Message Rate",
-      "datasource": "prometheus",
+      "title": "Kafka Consumer Lag",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 6 },
       "targets": [
         {
-          "expr": "rate(kafka_topic_partition_current_offset[1m])",
-          "legendFormat": "{{topic}}"
+          "expr": "kafka_consumergroup_lag{topic=\"flood-sensor-data\"}"
         }
-      ],
-      "gridPos": { "x": 6, "y": 1, "w": 18, "h": 8 }
-    },
-    {
-      "type": "row",
-      "title": "⚠️ Consumer Lag Monitoring",
-      "gridPos": { "x": 0, "y": 9, "w": 24, "h": 1 }
+      ]
     },
     {
       "type": "timeseries",
-      "title": "Consumer Lag per Group",
-      "datasource": "prometheus",
+      "title": "Kafka Throughput (Bytes In)",
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 6 },
       "targets": [
         {
-          "expr": "kafka_consumergroup_lag",
-          "legendFormat": "{{consumergroup}} - {{topic}}"
+          "expr": "rate(kafka_server_brokertopicmetrics_bytesin_total[1m])"
         }
-      ],
-      "gridPos": { "x": 0, "y": 10, "w": 24, "h": 8 }
+      ]
     },
     {
       "type": "timeseries",
-      "title": "Top Lagging Consumers",
-      "datasource": "prometheus",
+      "title": "Kafka Throughput (Bytes Out)",
+      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 6 },
       "targets": [
         {
-          "expr": "topk(5, kafka_consumergroup_lag)",
-          "legendFormat": "{{consumergroup}}"
+          "expr": "rate(kafka_server_brokertopicmetrics_bytesout_total[1m])"
         }
-      ],
-      "gridPos": { "x": 0, "y": 18, "w": 24, "h": 8 }
-    },
-    {
-      "type": "row",
-      "title": "📦 Topic Health",
-      "gridPos": { "x": 0, "y": 26, "w": 24, "h": 1 }
-    },
-    {
-      "type": "timeseries",
-      "title": "Topic Offsets Growth",
-      "datasource": "prometheus",
-      "targets": [
-        {
-          "expr": "kafka_topic_partition_current_offset",
-          "legendFormat": "{{topic}} - partition {{partition}}"
-        }
-      ],
-      "gridPos": { "x": 0, "y": 27, "w": 24, "h": 8 }
+      ]
     }
-  ],
-  "refresh": "10s",
-  "schemaVersion": 38,
-  "title": "Flood System - Kafka Monitoring Dashboard",
-  "time": {
-    "from": "now-15m",
-    "to": "now"
-  }
+  ]
 }

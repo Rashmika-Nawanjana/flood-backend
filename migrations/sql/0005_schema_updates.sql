@@ -9,7 +9,22 @@ ALTER TABLE IF EXISTS zones
     ADD COLUMN IF NOT EXISTS next_zone_id VARCHAR(64);
 
 ALTER TABLE IF EXISTS zones
-    ALTER COLUMN river_id SET NOT NULL,
+    ALTER COLUMN river_id DROP NOT NULL;
+
+-- Ensure a default Mahaweli River exists and backfill NULL zone river_id values
+INSERT INTO rivers (river_name, description)
+SELECT 'Mahaweli River', 'Seeded default Mahaweli River for backfill and testing'
+WHERE NOT EXISTS (SELECT 1 FROM rivers WHERE river_name = 'Mahaweli River');
+
+UPDATE zones
+SET river_id = (
+    SELECT river_id FROM rivers WHERE river_name = 'Mahaweli River' LIMIT 1
+)
+WHERE river_id IS NULL;
+
+-- Now that zones reference a river, enforce NOT NULL to guarantee river linkage
+ALTER TABLE IF EXISTS zones
+    ALTER COLUMN river_id SET NOT NULL;
 
 DO $$
 BEGIN

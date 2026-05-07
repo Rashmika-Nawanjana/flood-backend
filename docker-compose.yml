@@ -30,6 +30,8 @@ services:
   intelligence-service:
     build: ./intelligence-service
     container_name: flood-intelligence-service
+    ports:
+      - "${INTELLIGENCE_PORT:-8005}:8005"
     env_file:
       - .env
     environment:

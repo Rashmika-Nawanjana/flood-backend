@@ -1,42 +1,42 @@
 #!/usr/bin/env python3
-"""
-Extract InfluxDB telemetry into adapter-ready JSON, convert to CSV,
-transform to features, and run ML predictions.
-"""
+"""Extract InfluxDB telemetry, transform features, run inference, and persist results."""
 
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import subprocess
 import sys
-from collections import defaultdict
-from datetime import datetime, timezone
 from pathlib import Path
-import re
 
 import pandas as pd
-import psycopg
-from psycopg.rows import dict_row
-from psycopg.types.json import Json
 
 from ml.transform import LAG_CONFIG
 
-
-DEFAULT_FIELDS = (
-    "water_level_cm,pressure,flow_velocity_ms,rainfall_intensity_mmh,"
-    "temperature,battery_voltage,signal_strength_dbm"
+from pipeline.influx import (
+    DEFAULT_FIELDS,
+    METRIC_MAP,
+    SENSORS,
+    aggregate_zone_metrics,
+    build_zone_rows,
+    format_time_range,
+    get_upstream_chain,
+    load_pg_mappings,
+    load_records,
+    parse_time_range,
+    to_float,
 )
-
-METRIC_MAP = {
-    "water_level_cm": "water_level",
-    "pressure": "pressure",
-    "flow_velocity_ms": "velocity",
-    "rainfall_intensity_mmh": "rainfall",
-}
-
-SENSORS = ["velocity", "water_level", "pressure", "rainfall"]
+from pipeline.predictions import (
+    build_water_level_payload,
+    color_for_severity,
+    create_kafka_producer,
+    publish_zone_events,
+    resolve_model_id,
+    safe_name,
+    severity_from_peak,
+    summarize_zone_prediction,
+    write_predictions_to_db,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -106,6 +106,38 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip writing predictions to Postgres",
     )
+    parser.add_argument(
+        "--skip-kafka",
+        action="store_true",
+        help="Skip publishing prediction/risk/alert events to Kafka",
+    )
+    parser.add_argument(
+        "--kafka-broker",
+        default=os.getenv("KAFKA_BROKER"),
+        help="Kafka bootstrap server (env: KAFKA_BROKER)",
+    )
+    parser.add_argument(
+        "--analytics-topic",
+        default=os.getenv("ANALYTICS_PREDICTIONS_TOPIC", "analytics.predictions"),
+        help="Kafka topic for zone:risk:update and prediction:new",
+    )
+    parser.add_argument(
+        "--alerts-topic",
+        default=os.getenv("SYSTEM_ALERTS_TOPIC", "system.alerts"),
+        help="Kafka topic for alert:new",
+    )
+    parser.add_argument(
+        "--risk-warning-m",
+        type=float,
+        default=float(os.getenv("RISK_WARNING_M", "3.0")),
+        help="Water level (m) threshold for HIGH",
+    )
+    parser.add_argument(
+        "--risk-critical-m",
+        type=float,
+        default=float(os.getenv("RISK_CRITICAL_M", "4.0")),
+        help="Water level (m) threshold for CRITICAL",
+    )
 
     parser.add_argument("--url", default=None, help="InfluxDB URL")
     parser.add_argument("--token", default=None, help="InfluxDB token")
@@ -125,244 +157,6 @@ def resolve_path(root: Path, value: str) -> Path:
     return path if path.is_absolute() else root / path
 
 
-def parse_time_range(value: str) -> int | None:
-    if not value:
-        return None
-    match = re.match(r"^(\d+)([smhdw])$", value.strip().lower())
-    if not match:
-        return None
-    amount = int(match.group(1))
-    unit = match.group(2)
-    multipliers = {
-        "s": 1,
-        "m": 60,
-        "h": 3600,
-        "d": 86400,
-        "w": 604800,
-    }
-    return amount * multipliers[unit]
-
-
-def format_time_range(seconds: int) -> str:
-    if seconds % 3600 == 0:
-        return f"{seconds // 3600}h"
-    if seconds % 60 == 0:
-        return f"{seconds // 60}m"
-    return f"{seconds}s"
-
-
-def load_records(path: Path) -> list[dict]:
-    text = path.read_text(encoding="utf-8").strip()
-    if not text:
-        return []
-    if text[0] in "[{":
-        payload = json.loads(text)
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            return [payload]
-    records = []
-    for line in text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        records.append(json.loads(line))
-    return records
-
-
-def to_float(value):
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def load_pg_mappings(database_url: str):
-    if not database_url:
-        raise ValueError("database_url is required for --all-zones")
-
-    with psycopg.connect(database_url, row_factory=dict_row) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT sensor_id, zone_id
-                FROM sensor_nodes
-                WHERE zone_id IS NOT NULL
-                  AND is_active IS TRUE
-                """
-            )
-            sensors = cur.fetchall()
-
-            cur.execute(
-                """
-                SELECT zone_id, river_id, prev_zone_id
-                FROM zones
-                """
-            )
-            zones = cur.fetchall()
-
-    sensor_to_zone = {row["sensor_id"]: row["zone_id"] for row in sensors}
-    zone_info = {
-        row["zone_id"]: {
-            "river_id": row["river_id"],
-            "prev_zone_id": row["prev_zone_id"],
-        }
-        for row in zones
-    }
-    return sensor_to_zone, zone_info
-
-
-def aggregate_zone_metrics(records, sensor_to_zone):
-    sums = defaultdict(float)
-    counts = defaultdict(int)
-
-    for record in records:
-        if not isinstance(record, dict):
-            continue
-        device_id = record.get("device_id")
-        if not device_id:
-            continue
-        zone_id = sensor_to_zone.get(device_id)
-        if not zone_id:
-            continue
-        timestamp = record.get("timestamp")
-        if not timestamp:
-            continue
-
-        for src, dest in METRIC_MAP.items():
-            if src not in record:
-                continue
-            value = to_float(record.get(src))
-            if value is None:
-                continue
-            key = (zone_id, timestamp, dest)
-            sums[key] += value
-            counts[key] += 1
-
-    zone_ts = defaultdict(dict)
-    for (zone_id, timestamp, sensor), total in sums.items():
-        avg = total / counts[(zone_id, timestamp, sensor)]
-        zone_ts.setdefault(zone_id, {}).setdefault(timestamp, {})[sensor] = avg
-
-    return zone_ts
-
-
-def get_upstream_chain(zone_id, zone_info, limit):
-    chain = []
-    current = zone_id
-    base_river = zone_info.get(zone_id, {}).get("river_id")
-    for _ in range(limit):
-        prev_zone = zone_info.get(current, {}).get("prev_zone_id")
-        if not prev_zone:
-            break
-        if zone_info.get(prev_zone, {}).get("river_id") != base_river:
-            break
-        chain.append(prev_zone)
-        current = prev_zone
-    return chain
-
-
-def safe_name(value: str) -> str:
-    return "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in value)
-
-
-def resolve_model_id(database_url: str, explicit: int | None) -> int:
-    if explicit is not None:
-        return explicit
-    if not database_url:
-        raise ValueError("database_url is required to resolve model_id")
-
-    with psycopg.connect(database_url, row_factory=dict_row) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT model_id
-                FROM model_metadata
-                WHERE deployed_at IS NOT NULL
-                ORDER BY deployed_at DESC, trained_at DESC
-                LIMIT 1
-                """
-            )
-            row = cur.fetchone()
-            if row:
-                return int(row["model_id"])
-
-            cur.execute(
-                """
-                SELECT model_id
-                FROM model_metadata
-                ORDER BY trained_at DESC
-                LIMIT 1
-                """
-            )
-            row = cur.fetchone()
-            if row:
-                return int(row["model_id"])
-
-    raise ValueError("No model_metadata entries available to resolve model_id")
-
-
-def build_water_level_payload(df: pd.DataFrame) -> dict:
-    horizon_cols = [col for col in df.columns if col.startswith("y_pred_t_plus_")]
-    horizons = [int(col.split("_t_plus_")[-1]) for col in horizon_cols]
-
-    records = []
-    for _, row in df.iterrows():
-        entry = {"timestamp": row["TimeStamp"]}
-        for col in horizon_cols:
-            value = row[col]
-            entry[col] = None if pd.isna(value) else float(value)
-        records.append(entry)
-
-    return {
-        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "horizons": sorted(horizons),
-        "records": records,
-    }
-
-
-def write_predictions_to_db(database_url: str, model_id: int, payloads: list[dict]) -> None:
-    if not payloads:
-        return
-
-    insert = """
-        INSERT INTO flood_predictions (zone_id, model_id, water_level)
-        VALUES (%s, %s, %s)
-    """
-    with psycopg.connect(database_url) as conn:
-        with conn.cursor() as cur:
-            for item in payloads:
-                cur.execute(
-                    insert,
-                    (item["zone_id"], model_id, Json(item["water_level"])),
-                )
-        conn.commit()
-
-
-def build_zone_rows(zone_id, zone_metrics, zone_info, upstream_limit):
-    timestamps = sorted(zone_metrics.get(zone_id, {}).keys())
-    if not timestamps:
-        return []
-
-    upstream = get_upstream_chain(zone_id, zone_info, upstream_limit)
-    station_map = {
-        1: upstream[1] if len(upstream) >= 2 else None,
-        2: upstream[0] if len(upstream) >= 1 else None,
-        3: zone_id,
-    }
-
-    rows = []
-    for timestamp in timestamps:
-        row = {"TimeStamp": timestamp}
-        for station_idx in (1, 2, 3):
-            zone = station_map.get(station_idx)
-            data = zone_metrics.get(zone, {}).get(timestamp, {}) if zone else {}
-            for sensor in SENSORS:
-                row[f"station{station_idx}_{sensor}"] = data.get(sensor)
-        rows.append(row)
-    return rows
 
 
 def main() -> int:
@@ -425,6 +219,10 @@ def main() -> int:
     run_step(extract_cmd, root)
 
     if args.all_zones:
+        kafka_producer = None
+        if not args.skip_kafka:
+            kafka_producer = create_kafka_producer(args.kafka_broker)
+
         records = load_records(adapter_output)
         if not records:
             raise ValueError("No records returned from InfluxDB extraction")
@@ -493,7 +291,23 @@ def main() -> int:
             df_pred = pd.read_csv(zone_predictions_csv)
             if df_pred.empty:
                 continue
+            zone_name = info.get("zone_name") or zone_id
+            if kafka_producer is not None:
+                summary = summarize_zone_prediction(
+                    zone_id=zone_id,
+                    zone_name=zone_name,
+                    df_pred=df_pred,
+                    warning_m=args.risk_warning_m,
+                    critical_m=args.risk_critical_m,
+                )
+                publish_zone_events(
+                    producer=kafka_producer,
+                    analytics_topic=args.analytics_topic,
+                    alerts_topic=args.alerts_topic,
+                    summary=summary,
+                )
             df_pred.insert(0, "zone_id", zone_id)
+            df_pred.insert(1, "zone_name", zone_name)
             df_pred.insert(0, "river_id", info.get("river_id"))
             all_predictions.append(df_pred)
             if not args.skip_db:
@@ -515,6 +329,13 @@ def main() -> int:
             model_id = resolve_model_id(args.database_url, args.model_id)
             write_predictions_to_db(args.database_url, model_id, db_payloads)
             print("Stored predictions in flood_predictions table")
+
+        if kafka_producer is not None:
+            kafka_producer.flush()
+            kafka_producer.close()
+            print(
+                f"Published ML events to Kafka topics: {args.analytics_topic} (prediction:new, zone:risk:update), {args.alerts_topic} (alert:new)"
+            )
 
         print(f"\nDone. Predictions written to: {output_path}")
         return 0

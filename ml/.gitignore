@@ -1,0 +1,16 @@
+# Generated ML outputs
+pred_output/
+model_output/models/
+model_output/config.json
+model_output/metrics.csv
+model_output/feature_columns.txt
+model_output/test_predictions.csv
+
+# Generated data files
+*.csv
+data.csv
+transformed.csv
+
+# Adapter sample data (optional - keep if useful for testing)
+# adapters/sample_*.json
+# adapters/sample_*.ndjson

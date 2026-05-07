@@ -63,6 +63,37 @@ def fetch_sensors() -> list[dict[str, Any]]:
             return list(cur.fetchall())
 
 
+def fetch_sensors_by_zone(zone_id: str) -> list[dict[str, Any]]:
+    query = """
+        SELECT
+            s.sensor_id,
+            s.name,
+            s.zone_id,
+            z.zone_name,
+            s.lat,
+            s.lng,
+            s.address,
+            s.installed_date,
+            s.is_active,
+            s.firmware_version,
+            s.last_maintenance,
+            s.list_status_key,
+            s.list_thresholds_key,
+            s.watch_m,
+            s.advisory_m,
+            s.warning_m,
+            s.critical_m
+        FROM sensor_nodes s
+        LEFT JOIN zones z ON s.zone_id = z.zone_id
+        WHERE s.is_active IS TRUE AND s.zone_id = %s
+        ORDER BY s.sensor_id
+    """
+    with _get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, (zone_id,))
+            return list(cur.fetchall())
+
+
 def fetch_sensor(sensor_id: str) -> dict[str, Any] | None:
     query = """
         SELECT
@@ -91,6 +122,21 @@ def fetch_sensor(sensor_id: str) -> dict[str, Any] | None:
     with _get_pg_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(query, (sensor_id,))
+            return cur.fetchone()
+
+
+def fetch_zone(zone_id: str) -> dict[str, Any] | None:
+    query = """
+        SELECT
+            z.zone_id,
+            z.zone_name
+        FROM zones z
+        WHERE z.zone_id = %s
+        LIMIT 1
+    """
+    with _get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, (zone_id,))
             return cur.fetchone()
 
 

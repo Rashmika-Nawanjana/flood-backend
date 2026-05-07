@@ -116,6 +116,88 @@ paths:
     delete:
       responses: { "200": { description: Success } }
 
+  /v1/zones/{zone_id}/sensors:
+    summary: Sensors in a zone
+    parameters:
+      - name: zone_id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      responses:
+        "200":
+          description: List sensors in the requested zone
+
+  /v1/zones/{zone_id}/alerts:
+    summary: Alerts for a zone
+    parameters:
+      - name: zone_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: severity
+        in: query1
+        required: false
+        schema:
+          type: string
+    get:
+      responses:
+        "200":
+          description: List alerts filtered by zone
+
+  /v1/zones/{zone_id}/predictions:
+    summary: Predictions for a zone
+    parameters:
+      - name: zone_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: severity
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: timeframe
+        in: query
+        required: false
+        schema:
+          type: string
+    get:
+      responses:
+        "200":
+          description: List predictions filtered by zone
+
+  /v1/zones/{zone_id}/anomalies:
+    summary: Anomalies for a zone
+    parameters:
+      - name: zone_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: severity
+        in: query
+        required: false
+        schema:
+          type: string
+    get:
+      responses:
+        "200":
+          description: List anomalies filtered by zone
+
   /v1/shelters:
     summary: Shelters proxy (Zone Service)
     post:

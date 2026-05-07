@@ -1,12 +1,17 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 import psycopg
 import uuid
 from psycopg.types.json import Json
 
+from app.auth.clerk import require_roles
 from app.db.pg import get_connection
 
-router = APIRouter(prefix="/v1/admin", tags=["admin"])
+router = APIRouter(
+    prefix="/v1/admin",
+    tags=["admin"],
+    dependencies=[Depends(require_roles(["admin", "field_officer"]))],
+)
 
 
 class SensorLocation(BaseModel):
@@ -133,7 +138,9 @@ def create_sensor(payload: SensorCreatePayload) -> dict:
                 cur.execute(insert, params)
                 row = cur.fetchone()
     except psycopg.errors.ForeignKeyViolation as exc:
-        raise HTTPException(status_code=400, detail="Invalid zone_id for sensor") from exc
+        raise HTTPException(
+            status_code=400, detail="Invalid zone_id for sensor"
+        ) from exc
     return {"status": "success", "data": row}
 
 
@@ -267,7 +274,9 @@ def update_shelter(shelter_id: str, payload: ShelterUpdatePayload) -> dict:
     update = "UPDATE zone_shelters SET current_occupancy = %s, status = %s WHERE shelter_id = %s RETURNING *"
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(update, (data.get("current_occupancy"), data.get("status"), shelter_id))
+            cur.execute(
+                update, (data.get("current_occupancy"), data.get("status"), shelter_id)
+            )
             row = cur.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Shelter not found")

@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends
 
-from app.api.routers import admin, webhooks
+from app.api.routers import admin, users, webhooks
 from app.auth.clerk import get_current_user, require_roles
 
 router = APIRouter(prefix="/api")
 
 # Admin control plane only; microservices routed via Kong
 router.include_router(admin.router)
+router.include_router(users.router)
 router.include_router(webhooks.router)
 
 

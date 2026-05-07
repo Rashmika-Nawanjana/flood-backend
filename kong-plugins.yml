@@ -7,13 +7,11 @@ plugins:
       policy: local
       minute: 30
 
-  - name: key-auth
-    config:
-      key_names:
-        - apikey
-      hide_credentials: false
+# `key-auth` is applied per-service in `kong.yml` to avoid protecting the auth and health endpoints globally.
 
 consumers:
   - username: flood-backend-consumer
+    # Do not store production API keys in the repo. Replace via CI/deployment or create consumer credentials
+    # using the Kong admin API at deploy time. If you must store a dev key, replace the value below before use.
     keyauth_credentials:
-      - key: REPLACE_WITH_YOUR_API_KEY
+      - key: CHANGE_ME_IN_DEPLOYMENT

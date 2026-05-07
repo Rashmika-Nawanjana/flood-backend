@@ -8,4 +8,5 @@ python-jose[cryptography]==3.3.0
 requests==2.32.3
 svix==1.64.0
 influxdb-client==1.47.0
+aiokafka==0.11.0
 kafka-python==2.0.2

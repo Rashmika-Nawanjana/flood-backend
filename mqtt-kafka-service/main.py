@@ -60,6 +60,28 @@ def create_producer():
 
 producer = None
 
+
+def validate_payload(payload: dict) -> bool:
+    """Validate the new MQTT telemetry payload shape."""
+    required_fields = [
+        "device_id",
+        "timestamp",
+        "temperature",
+        "pressure",
+        "water_level_cm",
+        "rainfall_intensity_mmh",
+        "flow_velocity_ms",
+        "device_status",
+    ]
+    if not all(field in payload for field in required_fields):
+        return False
+
+    device_status = payload.get("device_status")
+    if not isinstance(device_status, dict):
+        return False
+
+    return all(key in device_status for key in ["battery_voltage", "signal_strength_dbm"])
+
 class MQTTClientManager:
     def __init__(self):
         self.client = mqtt.Client(client_id="mqtt_kafka_bridge")
@@ -88,8 +110,7 @@ class MQTTClientManager:
             payload = json.loads(msg.payload.decode())
             
             # Validate required fields
-            required_fields = ['device_id', 'water_level_cm', 'temperature', 'pressure']
-            if not all(k in payload for k in required_fields):
+            if not validate_payload(payload):
                 logger.warning(f"Skipped invalid message - missing fields: {payload}")
                 return
             
@@ -99,7 +120,10 @@ class MQTTClientManager:
                     return
                 future = producer.send(KAFKA_TOPIC, value=payload)
                 # Non-blocking: don't wait for send confirmation
-                logger.info(f"[MQTT→Kafka] {payload['device_id']} | Water: {payload['water_level_cm']}cm | Temp: {payload['temperature']}°C")
+                logger.info(
+                    f"[MQTT→Kafka] {payload['device_id']} | Water: {payload['water_level_cm']}cm | "
+                    f"Temp: {payload['temperature']}°C | Rain: {payload['rainfall_intensity_mmh']}mm/h"
+                )
         except json.JSONDecodeError:
             logger.error(f"Invalid JSON from MQTT: {msg.payload}")
         except Exception as e:

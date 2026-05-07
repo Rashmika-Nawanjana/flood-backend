@@ -18,6 +18,8 @@ services:
     container_name: flood-sensor-service
     ports:
       - "${SENSOR_PORT:-8003}:8002"
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-flooddb}
       INFLUXDB_URL: http://${INFLUXDB_HOST:-influxdb}:${INFLUXDB_PORT:-8086}
@@ -28,6 +30,8 @@ services:
   intelligence-service:
     build: ./intelligence-service
     container_name: flood-intelligence-service
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-flooddb}
       INFLUXDB_URL: http://${INFLUXDB_HOST:-influxdb}:${INFLUXDB_PORT:-8086}
@@ -40,6 +44,8 @@ services:
     container_name: flood-zone-service
     ports:
       - "${ZONE_PORT:-8004}:8004"
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-flooddb}
       INFLUXDB_URL: http://${INFLUXDB_HOST:-influxdb}:${INFLUXDB_PORT:-8086}
@@ -154,6 +160,7 @@ services:
     build: ./kafka-influx-service
     container_name: flood-kafka-influx-bridge
     environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-flooddb}
       KAFKA_BROKER: kafka:9092
       KAFKA_TOPIC: ${KAFKA_TOPIC:-flood-sensor-data}
       ANOMALY_DETECTOR_OUTPUT_TOPIC: system.alerts

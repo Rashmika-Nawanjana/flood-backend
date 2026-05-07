@@ -41,6 +41,7 @@ class Settings:
     clerk_jwks_url: str = os.getenv("CLERK_JWKS_URL", "")
     clerk_issuer: str = os.getenv("CLERK_ISSUER", "")
     clerk_webhook_secret: str = os.getenv("CLERK_WEBHOOK_SECRET", "")
+    clerk_secret_key: str = os.getenv("CLERK_SECRET_KEY", "")
 
     @property
     def allowed_origins_list(self) -> list[str]:

@@ -107,6 +107,30 @@ Expected response:
 { "status": "ok", "service": "flood-backend" }
 ```
 
+## Real-time stream (Socket.IO)
+
+Live stream base URL:
+
+```text
+ws://localhost:8000/ws/live
+```
+
+Socket.IO path (if your client requires explicit path):
+
+```text
+/ws/live/socket.io
+```
+
+Supported event names:
+
+- `sensor:update`
+- `zone:risk:update`
+- `prediction:new`
+- `alert:new`
+- `alert:resolved`
+- `sensor:offline`
+- `anomaly:new`
+
 ## Enforced commit message format
 
 This repository blocks commits that do not follow the agreed structure.

@@ -1,0 +1,43 @@
+--- intelligence-service/app/api/routers/intelligence.py
++++ intelligence-service/app/api/routers/intelligence.py
+@@ -1,5 +1,8 @@
+-from fastapi import APIRouter, Query
++import json
++import time
++from datetime import datetime, timezone
++from fastapi import APIRouter, Query, BackgroundTasks
++from kafka import KafkaProducer
+ 
+ router = APIRouter(prefix="/v1", tags=["intelligence"])
+ 
+@@ -85,3 +88,29 @@
+     ]
+ 
+     return {"status": "success", "count": len(alerts), "data": alerts}
++
++
++def get_kafka_producer():
++    return KafkaProducer(
++        bootstrap_servers='localhost:9092',
++        value_serializer=lambda v: json.dumps(v).encode('utf-8')
++    )
++
++@router.post("/trigger-risk-update")
++def trigger_risk_update():
++    """Simulate XGBoost risk score change triggering an event"""
++    event = {
++        "event": "zone:risk:update",
++        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
++        "data": {
++            "zone_id": "ZONE-K1",
++            "zone_name": "Getambe Basin",
++            "previous_level": "WARNING",
++            "current_level": "HIGH",
++            "risk_score": 78.4,
++            "color_code": "#F97316"
++        }
++    }
++    producer = get_kafka_producer()
++    producer.send("analytics.predictions", event)
++    producer.flush()
++    return {"status": "success", "message": "zone:risk:update event pushed to Kafka", "payload": event}

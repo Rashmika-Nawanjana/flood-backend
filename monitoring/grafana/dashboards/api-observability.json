@@ -1,0 +1,74 @@
+{
+  "__inputs": [],
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "🔥 API Observability",
+      "type": "row"
+    },
+
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 1 },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{job=\"api\"}[1m])) by (method)",
+          "refId": "A"
+        }
+      ],
+      "title": "Request Rate (RPS)",
+      "type": "timeseries"
+    },
+
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 1 },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"api\"}[5m])) by (le))",
+          "refId": "A"
+        }
+      ],
+      "title": "Latency (p95)",
+      "type": "timeseries"
+    },
+
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 7 },
+      "id": 4,
+      "targets": [
+        {
+          "expr": "100 * sum(rate(http_requests_total{job=\"api\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"api\"}[5m]))",
+          "refId": "A"
+        }
+      ],
+      "title": "5xx Error Rate %",
+      "type": "timeseries"
+    },
+
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 7 },
+      "id": 5,
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{job=\"api\"}[5m])) by (status)",
+          "refId": "A"
+        }
+      ],
+      "title": "Status Code Distribution",
+      "type": "bargauge"
+    }
+  ],
+  "schemaVersion": 38,
+  "title": "API Observability Dashboard",
+  "time": { "from": "now-15m", "to": "now" },
+  "refresh": "10s",
+  "version": 1
+}

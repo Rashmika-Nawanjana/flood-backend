@@ -7,6 +7,7 @@ from app.core.config import settings
 
 app = FastAPI(title=settings.app_name)
 Instrumentator().instrument(app).expose(app)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins_list,

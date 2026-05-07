@@ -38,6 +38,8 @@ services:
     depends_on:
       - postgres
       - influxdb
+    ports:
+      - "5027:8731"
 
   zone-service:
     build: ./zone-service

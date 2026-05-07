@@ -17,10 +17,6 @@ services:
           - DELETE
           - OPTIONS
         strip_path: false
-    plugins:
-      - name: key-auth
-        config:
-          hide_credentials: true
 
   - name: auth-service
     url: http://auth:8001
@@ -68,10 +64,6 @@ services:
           - DELETE
           - OPTIONS
         strip_path: false
-    plugins:
-      - name: key-auth
-        config:
-          hide_credentials: true
 
   - name: intelligence-service
     url: http://intelligence-service:8003
@@ -91,10 +83,6 @@ services:
           - DELETE
           - OPTIONS
         strip_path: false
-    plugins:
-      - name: key-auth
-        config:
-          hide_credentials: true
 
   - name: zone-service
     url: http://zone-service:8004
@@ -114,7 +102,3 @@ services:
           - DELETE
           - OPTIONS
         strip_path: false
-    plugins:
-      - name: key-auth
-        config:
-          hide_credentials: true

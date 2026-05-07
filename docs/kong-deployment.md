@@ -8,6 +8,8 @@ Recommended approaches
 - Use a secret manager (HashiCorp Vault, AWS Secrets Manager, GCP Secret Manager) to hold API keys and deliver them at deploy/runtime.
 - In Kubernetes, keep credentials in `Secret` objects and inject them into deployment jobs (not in code or declarative config stored in git).
 
+For the current Clerk-based setup in this repo, Kong does not verify user JWTs. Clerk verifies the user token in the backend, and Kong only routes requests.
+
 Example 1 — create consumer and key via Kong Admin API (CI job)
 
 1. Create consumer:
@@ -58,20 +60,21 @@ jobs:
 
 Security notes and best practices
 
-- Do NOT commit API keys or production credentials to git. Replace any placeholder values (e.g., `CHANGE_ME_IN_DEPLOYMENT`) during CI or with a secret manager at deploy time.
-- Use `hide_credentials: true` in `key-auth` plugin config (already enabled per-service) so Kong does not echo credentials back to clients.
+- Do NOT commit API keys or production credentials to git.
 - Avoid using `policy: local` rate-limiting in multi-node production — prefer a shared backend (Redis) or Kong Enterprise features for distributed rate-limiting.
 - Restrict access to the Kong Admin API by network controls and an admin token; never expose it publicly.
 
+If you are using Clerk for user authentication, do not use Kong `key-auth` for frontend user tokens. Keep Clerk JWT verification in backend dependencies.
+
 Where to update in this repo
 
-- The consumer placeholder is in `kong-plugins.yml` — do not replace it with real keys in the repo. Provision keys at deploy time instead.
-- Service-level `key-auth` is applied in `kong.yml` to keep auth control explicit per service.
+- Clerk token verification is in `app/auth/clerk.py`.
+- Route protection for privileged APIs is in `app/api/routers/admin.py`.
+- The gateway routes are defined in `api-gateway-spec.yaml`.
 
 If you want, I can:
 
-- Add a small deploy script (`scripts/register_kong_consumer.sh`) that reads secrets and registers a consumer/key via the Kong Admin API.
-- Add a short GitHub Actions workflow example to the repo that provisions the key from repository secrets.
+- Add a short diagram showing Clerk verification in the backend and Kong routing in front of it.
 
 ---
 

@@ -7,7 +7,7 @@ This document explains how requests move through the Flood backend when Kong is 
 1. A client sends a request to the public gateway URL or IP.
 2. Kong receives the request on its proxy port.
 3. Kong matches the request path against the configured route.
-4. Kong applies plugins such as `key-auth` or `rate-limiting` when configured.
+4. Kong applies gateway plugins such as `rate-limiting` when configured.
 5. Kong forwards the request to the upstream service container or server.
 6. The upstream service processes the request and returns a response.
 7. Kong sends the response back to the client.
@@ -19,6 +19,7 @@ In local development, the gateway and services run on the same Docker network.
 - `kong.yml` defines routes like `/api`, `/auth`, `/v1/sensors`, `/v1/predictions`, and `/v1/zones`.
 - Each route points to a Docker service name such as `api`, `auth`, `sensor-service`, `intelligence-service`, or `zone-service`.
 - Kong resolves those names through Docker networking and proxies traffic internally.
+- Clerk JWT verification happens in the backend, not in Kong.
 
 Example:
 
@@ -94,8 +95,8 @@ Result:
 ## Security notes
 
 - Do not commit API keys in config files.
-- Provision Kong consumer keys during deployment using the `scripts/register_kong_consumer.sh` script.
 - Keep the Kong Admin API private and restricted to trusted operators or CI jobs.
+- Protected backend routes fail closed with Clerk JWT verification and role checks.
 
 ## Suggested production layout on DigitalOcean
 
@@ -106,4 +107,4 @@ Result:
 
 ## Summary
 
-Kong is the traffic gate. DigitalOcean provides the infrastructure. The application services stay behind Kong, and Kong routes each request to the correct backend service based on the path and configured plugins.
+Kong is the traffic gate. DigitalOcean provides the infrastructure. The application services stay behind Kong, and Kong routes each request to the correct backend service based on the path. Clerk verifies the user token in the backend.

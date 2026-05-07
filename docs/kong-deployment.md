@@ -69,8 +69,10 @@ Where to update in this repo
 - Service-level `key-auth` is applied in `kong.yml` to keep auth control explicit per service.
 
 If you want, I can:
+
 - Add a small deploy script (`scripts/register_kong_consumer.sh`) that reads secrets and registers a consumer/key via the Kong Admin API.
 - Add a short GitHub Actions workflow example to the repo that provisions the key from repository secrets.
 
 ---
+
 Last updated: 2026-05-07

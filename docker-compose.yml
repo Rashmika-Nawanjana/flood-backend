@@ -38,8 +38,6 @@ services:
     depends_on:
       - postgres
       - influxdb
-    ports:
-      - "5027:8731"
 
   zone-service:
     build: ./zone-service
@@ -224,7 +222,19 @@ services:
       - "9183:9187"
     depends_on:
       - postgres
-  
+
+  kafka-exporter:
+   image: danielqsj/kafka-exporter:latest
+   container_name: kafka-exporter
+   command:
+    - --kafka.server=kafka:9092
+    - --web.listen-address=:9308
+   ports:
+    - "9308:9308"
+   depends_on:
+    - kafka
+   restart: unless-stopped
+   
 volumes:
   pg_data:
   influx_data:

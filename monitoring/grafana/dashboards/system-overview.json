@@ -1,0 +1,47 @@
+{
+  "title": "Kafka Pipeline — MQTT → Kafka → Services",
+  "schemaVersion": 38,
+  "refresh": "5s",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Kafka Messages In Rate",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "expr": "rate(kafka_topic_partition_current_offset{topic=\"flood-sensor-data\"}[1m])"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Kafka Consumer Lag",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "expr": "kafka_consumergroup_lag{topic=\"flood-sensor-data\"}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Kafka Throughput (Bytes In)",
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "expr": "rate(kafka_server_brokertopicmetrics_bytesin_total[1m])"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Kafka Throughput (Bytes Out)",
+      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "expr": "rate(kafka_server_brokertopicmetrics_bytesout_total[1m])"
+        }
+      ]
+    }
+  ]
+}

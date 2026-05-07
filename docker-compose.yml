@@ -102,7 +102,108 @@ services:
     volumes:
       - influx_data:/var/lib/influxdb2
 
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: flood-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@floodsense.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: flood-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: flood-kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+
+  mqtt-kafka-service:
+    build: ./mqtt-kafka-service
+    container_name: flood-mqtt-kafka-bridge
+    environment:
+      MQTT_BROKER: ${MQTT_BROKER:-mosquitto}
+      MQTT_PORT: ${MQTT_PORT:-1883}
+      MQTT_TOPIC: ${MQTT_TOPIC:-flood/sensors/#}
+      KAFKA_BROKER: kafka:9092
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-flood-sensor-data}
+    depends_on:
+      - kafka
+    restart: unless-stopped
+
+  kafka-influx-service:
+    build: ./kafka-influx-service
+    container_name: flood-kafka-influx-bridge
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-flooddb}
+      KAFKA_BROKER: kafka:9092
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-flood-sensor-data}
+      ANOMALY_DETECTOR_OUTPUT_TOPIC: system.alerts
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN:-my-super-secret-token-12345}
+      INFLUXDB_ORG: ${INFLUXDB_ORG:-flood}
+      INFLUXDB_BUCKET: ${INFLUXDB_BUCKET:-telemetry}
+    depends_on:
+      - kafka
+      - influxdb
+    restart: unless-stopped
+
+  ml-worker:
+    build:
+      context: .
+      dockerfile: ml-worker/Dockerfile
+    container_name: flood-ml-worker
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-flooddb}
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN:-my-super-secret-token-12345}
+      INFLUXDB_ORG: ${INFLUXDB_ORG:-flood}
+      INFLUXDB_BUCKET: ${INFLUXDB_BUCKET:-telemetry}
+      KAFKA_BROKER: kafka:9092
+      ANALYTICS_PREDICTIONS_TOPIC: ${ANALYTICS_PREDICTIONS_TOPIC:-analytics.predictions}
+      SYSTEM_ALERTS_TOPIC: ${SYSTEM_ALERTS_TOPIC:-system.alerts}
+      RISK_WARNING_M: ${RISK_WARNING_M:-3.0}
+      RISK_CRITICAL_M: ${RISK_CRITICAL_M:-4.0}
+      ML_PIPELINE_ALL_ZONES: "true"
+      ML_PIPELINE_INTERVAL_SECONDS: ${ML_PIPELINE_INTERVAL_SECONDS:-900}
+      ML_PIPELINE_TIME_RANGE: ${ML_PIPELINE_TIME_RANGE:-1h}
+      ML_PIPELINE_LIMIT: ${ML_PIPELINE_LIMIT:-50}
+      ML_PIPELINE_UPSTREAM_LIMIT: ${ML_PIPELINE_UPSTREAM_LIMIT:-2}
+      ML_PIPELINE_SAMPLING_MINUTES: ${ML_PIPELINE_SAMPLING_MINUTES:-60}
+    depends_on:
+      - postgres
+      - influxdb
+      - kafka
+    restart: unless-stopped
+
 volumes:
   pg_data:
   influx_data:
-  keycloak_data:
+  pgadmin_data:

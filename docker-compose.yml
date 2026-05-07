@@ -173,6 +173,36 @@ services:
       - influxdb
     restart: unless-stopped
 
+  ml-worker:
+    build:
+      context: .
+      dockerfile: ml-worker/Dockerfile
+    container_name: flood-ml-worker
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-flooddb}
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN:-my-super-secret-token-12345}
+      INFLUXDB_ORG: ${INFLUXDB_ORG:-flood}
+      INFLUXDB_BUCKET: ${INFLUXDB_BUCKET:-telemetry}
+      KAFKA_BROKER: kafka:9092
+      ANALYTICS_PREDICTIONS_TOPIC: ${ANALYTICS_PREDICTIONS_TOPIC:-analytics.predictions}
+      SYSTEM_ALERTS_TOPIC: ${SYSTEM_ALERTS_TOPIC:-system.alerts}
+      RISK_WARNING_M: ${RISK_WARNING_M:-3.0}
+      RISK_CRITICAL_M: ${RISK_CRITICAL_M:-4.0}
+      ML_PIPELINE_ALL_ZONES: "true"
+      ML_PIPELINE_INTERVAL_SECONDS: ${ML_PIPELINE_INTERVAL_SECONDS:-900}
+      ML_PIPELINE_TIME_RANGE: ${ML_PIPELINE_TIME_RANGE:-1h}
+      ML_PIPELINE_LIMIT: ${ML_PIPELINE_LIMIT:-50}
+      ML_PIPELINE_UPSTREAM_LIMIT: ${ML_PIPELINE_UPSTREAM_LIMIT:-2}
+      ML_PIPELINE_SAMPLING_MINUTES: ${ML_PIPELINE_SAMPLING_MINUTES:-60}
+    depends_on:
+      - postgres
+      - influxdb
+      - kafka
+    restart: unless-stopped
+
 volumes:
   pg_data:
   influx_data:

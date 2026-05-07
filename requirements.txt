@@ -9,3 +9,4 @@ requests==2.32.3
 svix==1.64.0
 influxdb-client==1.47.0
 kafka-python==2.0.2
+prometheus-fastapi-instrumentator==7.1.0

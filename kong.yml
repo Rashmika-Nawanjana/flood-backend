@@ -18,23 +18,6 @@ services:
           - OPTIONS
         strip_path: false
 
-  - name: auth-service
-    url: http://auth:8001
-    routes:
-      - name: auth-service-route
-        paths:
-          - /auth
-        protocols:
-          - http
-          - https
-        methods:
-          - GET
-          - POST
-          - PUT
-          - PATCH
-          - DELETE
-          - OPTIONS
-        strip_path: false
 
   - name: health-service
     url: http://api:8000

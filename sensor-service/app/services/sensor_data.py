@@ -255,3 +255,56 @@ def get_history(
         )
 
     return data
+
+
+def fetch_anomalies(limit: int = 100, since: datetime | None = None) -> list[dict[str, Any]]:
+    query = """
+        SELECT
+            a.anomaly_id,
+            a.sensor_id,
+            a.zone_id,
+            a.reading,
+            a.type,
+            a.severity,
+            a.anomaly_score,
+            a.status,
+            a.detected_at
+        FROM anomalies a
+        {where}
+        ORDER BY a.detected_at DESC
+        LIMIT %s
+    """
+    where_clause = ""
+    params = []
+    if since is not None:
+        where_clause = "WHERE a.detected_at >= %s"
+        params.append(since)
+    params.append(limit)
+    sql = query.format(where=where_clause)
+    with _get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, tuple(params))
+            return list(cur.fetchall())
+
+
+def fetch_zone_anomalies(zone_id: str, limit: int = 100) -> list[dict[str, Any]]:
+    query = """
+        SELECT
+            a.anomaly_id,
+            a.sensor_id,
+            a.zone_id,
+            a.reading,
+            a.type,
+            a.severity,
+            a.anomaly_score,
+            a.status,
+            a.detected_at
+        FROM anomalies a
+        WHERE a.zone_id = %s
+        ORDER BY a.detected_at DESC
+        LIMIT %s
+    """
+    with _get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, (zone_id, limit))
+            return list(cur.fetchall())

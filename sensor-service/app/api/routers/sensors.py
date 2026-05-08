@@ -329,20 +329,19 @@ def list_anomalies(
     items = []
     for r in rows:
         reading = r.get("reading") or {}
-        created = r.get("created_at")
         items.append(
             {
                 "anomaly_id": r.get("anomaly_id"),
                 "sensor_id": r.get("sensor_id"),
                 "zone_id": r.get("zone_id"),
-                "detected_at": _to_iso(created) if created else None,
-                "type": r.get("detection_method") or reading.get("type") or "ANOMALY",
+                "detected_at": _to_iso(r.get("detected_at")),
+                "type": r.get("type") or reading.get("type") or "ANOMALY",
                 "description": reading.get("description") or "",
                 "severity": r.get("severity"),
-                "anomaly_score": reading.get("score"),
+                "anomaly_score": r.get("anomaly_score") or reading.get("score"),
                 "reading_at_detection": reading,
                 "expected_range": reading.get("expected_range"),
-                "status": "UNRESOLVED",
+                "status": r.get("status") or "UNRESOLVED",
                 "auto_alert_triggered": reading.get("alert_id") is not None,
                 "alert_id": reading.get("alert_id"),
             }
@@ -375,20 +374,19 @@ def list_zone_anomalies(
     items = []
     for r in rows:
         reading = r.get("reading") or {}
-        created = r.get("created_at")
         items.append(
             {
                 "anomaly_id": r.get("anomaly_id"),
                 "sensor_id": r.get("sensor_id"),
                 "zone_id": r.get("zone_id"),
-                "detected_at": _to_iso(created) if created else None,
-                "type": r.get("detection_method") or reading.get("type") or "ANOMALY",
+                "detected_at": _to_iso(r.get("detected_at")),
+                "type": r.get("type") or reading.get("type") or "ANOMALY",
                 "description": reading.get("description") or "",
                 "severity": r.get("severity"),
-                "anomaly_score": reading.get("score"),
+                "anomaly_score": r.get("anomaly_score") or reading.get("score"),
                 "reading_at_detection": reading,
                 "expected_range": reading.get("expected_range"),
-                "status": "UNRESOLVED",
+                "status": r.get("status") or "UNRESOLVED",
                 "auto_alert_triggered": reading.get("alert_id") is not None,
                 "alert_id": reading.get("alert_id"),
             }

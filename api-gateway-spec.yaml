@@ -24,23 +24,6 @@ services:
           policy: local
           limit_by: consumer
 
-  - name: auth-service
-    url: http://auth:8001
-    routes:
-      - name: auth-service-route
-        paths:
-          - /auth
-        protocols:
-          - http
-          - https
-        methods:
-          - GET
-          - POST
-          - PUT
-          - PATCH
-          - DELETE
-          - OPTIONS
-        strip_path: false
 
   - name: sensor-service
     url: http://sensor-service:8002

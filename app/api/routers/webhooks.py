@@ -1,7 +1,11 @@
 """
 Clerk Webhook Handler
 Syncs Clerk user lifecycle events → PostgreSQL users table.
-Events: user.created, user.updated, user.deleted
+
+Events handled:
+  user.created  → INSERT (ON CONFLICT DO NOTHING to avoid duplicates)
+  user.updated  → UPDATE email, full_name, role, zone_id, updated_at
+  user.deleted  → soft-delete (is_active = false)
 """
 
 import json
@@ -18,7 +22,35 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/webhooks", tags=["webhooks"])
 
 
-def verify_clerk_webhook(request: Request, payload: bytes) -> dict:
+# ── Helpers ──────────────────────────────────────────────────────────
+
+
+def _extract_user_fields(data: dict) -> dict:
+    """Extract normalised user fields from a Clerk webhook event payload."""
+    email_addresses = data.get("email_addresses", [])
+    email = (
+        email_addresses[0].get("email_address", "") if email_addresses else ""
+    )
+
+    first_name = data.get("first_name") or ""
+    last_name = data.get("last_name") or ""
+    full_name = f"{first_name} {last_name}".strip() or None
+
+    public_metadata = data.get("public_metadata") or {}
+    role = public_metadata.get("role", "citizen")
+    zone_id = public_metadata.get("zone_id") or None
+
+    return {
+        "clerk_id": data.get("id"),
+        "email": email,
+        "full_name": full_name,
+        "role": role,
+        "zone_id": zone_id,
+    }
+
+
+def _verify_webhook(request: Request, payload: bytes) -> dict:
+    """Verify the Clerk webhook signature via svix, return parsed body."""
     secret = settings.clerk_webhook_secret.strip()
     if not secret:
         raise HTTPException(
@@ -37,8 +69,8 @@ def verify_clerk_webhook(request: Request, payload: bytes) -> dict:
         )
 
     try:
-        webhook = Webhook(secret)
-        webhook.verify(
+        wh = Webhook(secret)
+        wh.verify(
             payload.decode("utf-8"),
             {
                 "svix-id": svix_id,
@@ -61,6 +93,9 @@ def verify_clerk_webhook(request: Request, payload: bytes) -> dict:
         ) from exc
 
 
+# ── Endpoint ─────────────────────────────────────────────────────────
+
+
 @router.post("/clerk")
 async def clerk_webhook(request: Request) -> dict:
     """
@@ -69,10 +104,8 @@ async def clerk_webhook(request: Request) -> dict:
     """
     payload = await request.body()
 
-    try:
-        payload_data = verify_clerk_webhook(request, payload)
-    except HTTPException:
-        raise
+    # Signature verification — raises 400 on failure
+    payload_data = _verify_webhook(request, payload)
 
     event_type = payload_data.get("type")
     data = payload_data.get("data", {})
@@ -83,62 +116,80 @@ async def clerk_webhook(request: Request) -> dict:
             detail="Missing event type",
         )
 
-    clerk_id = data.get("id")
-    email_addresses = data.get("email_addresses", [])
-    primary_email_id = data.get("primary_email_address_id")
-    email = next(
-        (
-            e.get("email_address")
-            for e in email_addresses
-            if e.get("id") == primary_email_id
-        ),
-        email_addresses[0].get("email_address") if email_addresses else "",
-    )
-    first_name = data.get("first_name", "") or ""
-    last_name = data.get("last_name", "") or ""
-    full_name = f"{first_name} {last_name}".strip() or email
-    public_metadata = data.get("public_metadata", {}) or {}
-    role = public_metadata.get("role", "citizen")
-
     try:
         with get_connection() as conn:
             if event_type == "user.created":
+                fields = _extract_user_fields(data)
                 conn.execute(
                     """
-                    INSERT INTO users (clerk_id, email, full_name, role, is_active)
-                    VALUES (%s, %s, %s, %s, TRUE)
-                    ON CONFLICT (clerk_id) DO UPDATE
-                    SET email = EXCLUDED.email,
-                        full_name = EXCLUDED.full_name,
-                        role = EXCLUDED.role,
-                        is_active = TRUE
+                    INSERT INTO users
+                        (clerk_id, email, full_name, role, zone_id, is_active)
+                    VALUES (%s, %s, %s, %s, %s, TRUE)
+                    ON CONFLICT (clerk_id) DO NOTHING
                     """,
-                    (clerk_id, email, full_name, role),
+                    (
+                        fields["clerk_id"],
+                        fields["email"],
+                        fields["full_name"],
+                        fields["role"],
+                        fields["zone_id"],
+                    ),
                 )
-                logger.info("User created/synced: %s (%s)", clerk_id, email)
+                logger.info(
+                    "user.created → %s (%s)", fields["clerk_id"], fields["email"]
+                )
 
             elif event_type == "user.updated":
+                fields = _extract_user_fields(data)
                 conn.execute(
                     """
                     UPDATE users
-                    SET email = %s, full_name = %s, role = %s
+                    SET email      = %s,
+                        full_name  = %s,
+                        role       = %s,
+                        zone_id    = %s,
+                        updated_at = NOW()
                     WHERE clerk_id = %s
                     """,
-                    (email, full_name, role, clerk_id),
+                    (
+                        fields["email"],
+                        fields["full_name"],
+                        fields["role"],
+                        fields["zone_id"],
+                        fields["clerk_id"],
+                    ),
                 )
-                logger.info("User updated: %s (%s)", clerk_id, email)
+                logger.info(
+                    "user.updated → %s (%s)", fields["clerk_id"], fields["email"]
+                )
 
             elif event_type == "user.deleted":
+                clerk_id = data.get("id")
                 conn.execute(
-                    "UPDATE users SET is_active = FALSE WHERE clerk_id = %s",
+                    """
+                    UPDATE users
+                    SET is_active = FALSE, updated_at = NOW()
+                    WHERE clerk_id = %s
+                    """,
                     (clerk_id,),
                 )
-                logger.info("User soft-deleted: %s", clerk_id)
+                logger.info("user.deleted → soft-deleted %s", clerk_id)
+
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Unrecognised event type: {event_type}",
+                )
 
             conn.commit()
 
+    except HTTPException:
+        raise
     except Exception as exc:
-        # Log but don't fail — DB might not have users table yet
-        logger.warning("Webhook DB sync failed (non-fatal): %s", exc)
+        logger.error("Webhook DB sync failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database sync failed",
+        ) from exc
 
     return {"status": "ok", "event": event_type}

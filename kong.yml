@@ -17,12 +17,6 @@ services:
           - DELETE
           - OPTIONS
         strip_path: false
-    plugins:
-      - name: rate-limiting
-        config:
-          minute: 30
-          policy: local
-          limit_by: consumer
 
   - name: auth-service
     url: http://auth:8001
@@ -50,4 +44,61 @@ services:
           - /health
         protocols:
           - http
+        strip_path: false
+
+  - name: sensor-service
+    url: http://sensor-service:8002
+    routes:
+      - name: sensor-service-route
+        paths:
+          - /v1/sensors
+          - /v1/anomalies
+        protocols:
+          - http
+          - https
+        methods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+        strip_path: false
+
+  - name: intelligence-service
+    url: http://intelligence-service:8003
+    routes:
+      - name: intelligence-service-route
+        paths:
+          - /v1/predictions
+          - /v1/alerts
+        protocols:
+          - http
+          - https
+        methods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+        strip_path: false
+
+  - name: zone-service
+    url: http://zone-service:8004
+    routes:
+      - name: zone-service-route
+        paths:
+          - /v1/zones
+          - /v1/shelters
+        protocols:
+          - http
+          - https
+        methods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
         strip_path: false

@@ -18,6 +18,8 @@ services:
     container_name: flood-sensor-service
     ports:
       - "${SENSOR_PORT:-8003}:8002"
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-flooddb}
       INFLUXDB_URL: http://${INFLUXDB_HOST:-influxdb}:${INFLUXDB_PORT:-8086}
@@ -28,6 +30,10 @@ services:
   intelligence-service:
     build: ./intelligence-service
     container_name: flood-intelligence-service
+    ports:
+      - "${INTELLIGENCE_PORT:-8005}:8005"
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-flooddb}
       INFLUXDB_URL: http://${INFLUXDB_HOST:-influxdb}:${INFLUXDB_PORT:-8086}
@@ -40,6 +46,8 @@ services:
     container_name: flood-zone-service
     ports:
       - "${ZONE_PORT:-8004}:8004"
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-flooddb}
       INFLUXDB_URL: http://${INFLUXDB_HOST:-influxdb}:${INFLUXDB_PORT:-8086}
@@ -154,8 +162,10 @@ services:
     build: ./kafka-influx-service
     container_name: flood-kafka-influx-bridge
     environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-flooddb}
       KAFKA_BROKER: kafka:9092
       KAFKA_TOPIC: ${KAFKA_TOPIC:-flood-sensor-data}
+      ANOMALY_DETECTOR_OUTPUT_TOPIC: system.alerts
       INFLUXDB_URL: http://influxdb:8086
       INFLUXDB_TOKEN: ${INFLUXDB_TOKEN:-my-super-secret-token-12345}
       INFLUXDB_ORG: ${INFLUXDB_ORG:-flood}
@@ -163,6 +173,36 @@ services:
     depends_on:
       - kafka
       - influxdb
+    restart: unless-stopped
+
+  ml-worker:
+    build:
+      context: .
+      dockerfile: ml-worker/Dockerfile
+    container_name: flood-ml-worker
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-flooddb}
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN:-my-super-secret-token-12345}
+      INFLUXDB_ORG: ${INFLUXDB_ORG:-flood}
+      INFLUXDB_BUCKET: ${INFLUXDB_BUCKET:-telemetry}
+      KAFKA_BROKER: kafka:9092
+      ANALYTICS_PREDICTIONS_TOPIC: ${ANALYTICS_PREDICTIONS_TOPIC:-analytics.predictions}
+      SYSTEM_ALERTS_TOPIC: ${SYSTEM_ALERTS_TOPIC:-system.alerts}
+      RISK_WARNING_M: ${RISK_WARNING_M:-3.0}
+      RISK_CRITICAL_M: ${RISK_CRITICAL_M:-4.0}
+      ML_PIPELINE_ALL_ZONES: "true"
+      ML_PIPELINE_INTERVAL_SECONDS: ${ML_PIPELINE_INTERVAL_SECONDS:-900}
+      ML_PIPELINE_TIME_RANGE: ${ML_PIPELINE_TIME_RANGE:-1h}
+      ML_PIPELINE_LIMIT: ${ML_PIPELINE_LIMIT:-50}
+      ML_PIPELINE_UPSTREAM_LIMIT: ${ML_PIPELINE_UPSTREAM_LIMIT:-2}
+      ML_PIPELINE_SAMPLING_MINUTES: ${ML_PIPELINE_SAMPLING_MINUTES:-60}
+    depends_on:
+      - postgres
+      - influxdb
+      - kafka
     restart: unless-stopped
 
 volumes:

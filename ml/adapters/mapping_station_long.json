@@ -1,0 +1,11 @@
+{
+  "station_field": "station",
+  "timestamp_field": "timestamp",
+  "metric_map": {
+    "water_level_cm": "water_level",
+    "pressure": "pressure",
+    "velocity": "velocity",
+    "rainfall": "rainfall"
+  },
+  "station_prefix": "station"
+}

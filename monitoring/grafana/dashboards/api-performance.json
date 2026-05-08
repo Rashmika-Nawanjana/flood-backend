@@ -1,0 +1,60 @@
+{
+  "dashboard": {
+    "title": "API Performance",
+    "description": "API health and latency",
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "10s",
+    "panels": [
+      {
+        "type": "timeseries",
+        "title": "Request Rate",
+        "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+        "datasource": "prometheus",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total[5m])",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "type": "timeseries",
+        "title": "Error Rate (5xx)",
+        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+        "datasource": "prometheus",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{status=~\"5..\"}[5m])",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "type": "stat",
+        "title": "Total Requests",
+        "gridPos": { "x": 0, "y": 8, "w": 12, "h": 6 },
+        "datasource": "prometheus",
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[5m]))",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "type": "stat",
+        "title": "Total Errors",
+        "gridPos": { "x": 12, "y": 8, "w": 12, "h": 6 },
+        "datasource": "prometheus",
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m]))",
+            "refId": "A"
+          }
+        ]
+      }
+    ]
+  }
+}

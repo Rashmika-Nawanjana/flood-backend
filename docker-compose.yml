@@ -192,10 +192,11 @@ services:
     depends_on:
       - prometheus
     volumes:
-      - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
-      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
-      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+    - grafana_data:/var/lib/grafana
+    - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+    - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+    - ./monitoring/grafana/provisioning/alerting:/etc/grafana/provisioning/alerting   
+    - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
   node-exporter:
     image: prom/node-exporter:latest
     container_name: flood-node-exporter
@@ -236,18 +237,21 @@ services:
    restart: unless-stopped
 
   loki:
-   image: grafana/loki:latest
-   ports:
-    - "3108:3100"
+    image: grafana/loki:latest
+    container_name: flood-loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki_data:/loki
 
   promtail:
    image: grafana/promtail:latest
+   container_name: flood-promtail
    volumes:
-    - /var/log:/var/log
-    - /var/lib/docker/containers:/var/lib/docker/containers:ro
     - /var/run/docker.sock:/var/run/docker.sock
-    - ./promtail-config.yml:/etc/promtail/config.yml
-   command: -config.file=/etc/promtail/config.yml
+    - ./monitoring/promtail.yml:/etc/promtail/promtail.yml
+   command: -config.file=/etc/promtail/promtail.yml
    depends_on:
     - loki
    
@@ -256,3 +260,4 @@ volumes:
   influx_data:
   pgadmin_data:
   grafana_data:
+  loki_data:

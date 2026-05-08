@@ -1,0 +1,35 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: api-simple-alerts
+    folder: api-alerts
+    interval: 1m
+
+    rules:
+      - uid: api_high_request_rate
+        title: API High Request Rate
+        condition: A
+        for: 1m
+
+        data:
+          - refId: A
+            datasourceUid: prometheus
+
+            relativeTimeRange:
+              from: 300
+              to: 0
+
+            model:
+              expr: rate(http_requests_total[5m]) > 5
+              refId: A
+
+        noDataState: NoData
+        execErrState: Alerting
+
+        labels:
+          severity: warning
+
+        annotations:
+          summary: "API request rate is too high"
+          description: "Requests/sec exceeded threshold (5/sec)"

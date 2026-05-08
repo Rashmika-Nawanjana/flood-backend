@@ -1,47 +1,37 @@
 {
-  "title": "Kafka Pipeline — MQTT → Kafka → Services",
-  "schemaVersion": 38,
-  "refresh": "5s",
-  "panels": [
-    {
-      "type": "timeseries",
-      "title": "Kafka Messages In Rate",
-      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 6 },
-      "targets": [
-        {
-          "expr": "rate(kafka_topic_partition_current_offset{topic=\"flood-sensor-data\"}[1m])"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "Kafka Consumer Lag",
-      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 6 },
-      "targets": [
-        {
-          "expr": "kafka_consumergroup_lag{topic=\"flood-sensor-data\"}"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "Kafka Throughput (Bytes In)",
-      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 6 },
-      "targets": [
-        {
-          "expr": "rate(kafka_server_brokertopicmetrics_bytesin_total[1m])"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "Kafka Throughput (Bytes Out)",
-      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 6 },
-      "targets": [
-        {
-          "expr": "rate(kafka_server_brokertopicmetrics_bytesout_total[1m])"
-        }
-      ]
-    }
-  ]
+  "dashboard": {
+    "id": null,
+    "title": "System Overview",
+    "tags": ["system", "overview"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "10s",
+    "panels": [
+      {
+        "type": "timeseries",
+        "title": "CPU Usage",
+        "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+        "datasource": "prometheus",
+        "targets": [
+          {
+            "expr": "avg(rate(process_cpu_seconds_total[5m])) * 100",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "type": "timeseries",
+        "title": "Memory Usage",
+        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+        "datasource": "prometheus",
+        "targets": [
+          {
+            "expr": "process_resident_memory_bytes",
+            "refId": "A"
+          }
+        ]
+      }
+    ]
+  }
 }

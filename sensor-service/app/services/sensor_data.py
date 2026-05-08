@@ -264,18 +264,20 @@ def fetch_anomalies(limit: int = 100, since: datetime | None = None) -> list[dic
             a.sensor_id,
             a.zone_id,
             a.reading,
-            a.detection_method,
+            a.type,
             a.severity,
-            a.created_at
+            a.anomaly_score,
+            a.status,
+            a.detected_at
         FROM anomalies a
         {where}
-        ORDER BY a.created_at DESC
+        ORDER BY a.detected_at DESC
         LIMIT %s
     """
     where_clause = ""
     params = []
     if since is not None:
-        where_clause = "WHERE a.created_at >= %s"
+        where_clause = "WHERE a.detected_at >= %s"
         params.append(since)
     params.append(limit)
     sql = query.format(where=where_clause)
@@ -292,12 +294,14 @@ def fetch_zone_anomalies(zone_id: str, limit: int = 100) -> list[dict[str, Any]]
             a.sensor_id,
             a.zone_id,
             a.reading,
-            a.detection_method,
+            a.type,
             a.severity,
-            a.created_at
+            a.anomaly_score,
+            a.status,
+            a.detected_at
         FROM anomalies a
         WHERE a.zone_id = %s
-        ORDER BY a.created_at DESC
+        ORDER BY a.detected_at DESC
         LIMIT %s
     """
     with _get_pg_connection() as conn:

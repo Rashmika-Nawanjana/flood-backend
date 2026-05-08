@@ -8,7 +8,7 @@ Quick guide to deploy Kong data plane connected to Kong Konnect control plane.
 
 - [ ] DigitalOcean droplet (Ubuntu 22.04, 1GB RAM minimum)
 - [ ] Kong Konnect account with control plane created
-- [ ] Kong Konnect Personal Access Token (kpat_...)
+- [ ] Kong Konnect Personal Access Token (kpat\_...)
 - [ ] SSH access to droplet
 
 ---
@@ -117,6 +117,7 @@ ls -la
 ```
 
 **Output:**
+
 ```
 tls.crt
 tls.key
@@ -184,6 +185,7 @@ docker-compose ps
 ```
 
 **Expected output:**
+
 ```
 NAME                   STATUS
 kong-data-plane        Up 2 minutes
@@ -197,6 +199,7 @@ docker-compose logs kong | grep -i "cluster\|connected"
 ```
 
 **Look for:**
+
 ```
 Kong gateway started in hybrid mode (data plane)
 Successfully connected to control plane
@@ -213,6 +216,7 @@ curl -i http://localhost:8000/health
 ```
 
 **Expected response:**
+
 ```
 HTTP/1.1 200 OK
 ```

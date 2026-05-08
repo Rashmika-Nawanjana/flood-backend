@@ -3,6 +3,7 @@
 ## 📋 Prerequisites
 
 Before starting, ensure you have:
+
 - [ ] DigitalOcean account
 - [ ] Created a Droplet (Ubuntu 22.04, 2GB RAM minimum)
 - [ ] SSH key added to droplet
@@ -56,6 +57,7 @@ docker-compose --version
 ```
 
 **Expected Output:**
+
 ```
 Docker version 24.x.x
 Docker Compose version 2.x.x
@@ -80,6 +82,7 @@ ls -la | grep -E "(docker-compose|\.env|Dockerfile)"
 ```
 
 **Expected files:**
+
 - `docker-compose.stg.yml`
 - `.env` (to be created next)
 - `Dockerfile`
@@ -149,6 +152,7 @@ nano .env
 ```
 
 **Replace these values:**
+
 - `YOUR_TOKEN_HERE` → Your Kong Konnect Personal Access Token
 - `your_db_password_here` → Your PostgreSQL password
 - `your_influx_token_here` → Your InfluxDB token
@@ -221,6 +225,7 @@ docker-compose -f docker-compose.stg.yml ps
 ```
 
 **Expected Output:**
+
 ```
 NAME                    STATUS
 flood-backend-db-1      Up 2 minutes
@@ -236,6 +241,7 @@ docker-compose -f docker-compose.stg.yml logs kong | head -50
 ```
 
 **Look for:**
+
 ```
 Kong gateway started in hybrid mode (data plane)
 Connected to control plane successfully
@@ -265,7 +271,7 @@ server {
 
     ssl_certificate /opt/flood_managment/flood-backend/certs/tls.crt;
     ssl_certificate_key /opt/flood_managment/flood-backend/certs/tls.key;
-    
+
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
     ssl_prefer_server_ciphers on;
@@ -295,6 +301,7 @@ nginx -t
 ```
 
 **Expected Output:**
+
 ```
 nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
 nginx: configuration file /etc/nginx/nginx.conf test is successful
@@ -318,6 +325,7 @@ curl -i http://localhost:8000/health
 ```
 
 **Expected Response:**
+
 ```
 HTTP/1.1 200 OK
 ```
@@ -375,8 +383,9 @@ curl -k https://stg.floodsense.lk/api/ping
 ```
 
 **Expected Response:**
+
 ```json
-{"status": "pong"}
+{ "status": "pong" }
 ```
 
 ### Step 9.2: Test with Kong authentication
@@ -513,6 +522,7 @@ docker-compose -f docker-compose.stg.yml logs
 ## 📞 Quick Reference
 
 ### Important Paths
+
 ```
 Repository: /opt/flood_managment/flood-backend
 Config File: .env
@@ -522,6 +532,7 @@ Docker Compose: docker-compose.stg.yml
 ```
 
 ### Important Ports
+
 ```
 Kong Admin API (internal): 8001
 Kong Proxy (internal): 8000
@@ -533,6 +544,7 @@ InfluxDB: 8086 (internal)
 ```
 
 ### Important Commands
+
 ```bash
 # View status
 docker-compose -f docker-compose.stg.yml ps

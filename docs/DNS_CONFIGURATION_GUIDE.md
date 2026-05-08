@@ -15,6 +15,7 @@ This guide explains how to configure DNS for your DigitalOcean deployment.
 After deployment, you should have an IP address like: `123.45.67.89`
 
 If you forgot it, SSH to your droplet and run:
+
 ```bash
 curl -s https://api.ipify.org
 ```
@@ -102,7 +103,7 @@ dig stg.floodsense.lk +short
 4. Update your domain's nameservers to Cloudflare's:
    - `iris.ns.cloudflare.com`
    - `nathan.ns.cloudflare.com`
-   (Update at your current registrar)
+     (Update at your current registrar)
 
 ### Step 2: Add DNS Record
 
@@ -170,6 +171,7 @@ nslookup stg.floodsense.lk
 ```
 
 **Expected output:**
+
 ```
 Server:     8.8.8.8
 Address:    8.8.8.8#53
@@ -186,6 +188,7 @@ dig stg.floodsense.lk +short
 ```
 
 **Expected output:**
+
 ```
 123.45.67.89
 ```
@@ -197,6 +200,7 @@ host stg.floodsense.lk
 ```
 
 **Expected output:**
+
 ```
 stg.floodsense.lk has address 123.45.67.89
 ```
@@ -239,6 +243,7 @@ curl -k https://stg.floodsense.lk/api/users \
 **Symptom:** `nslookup stg.floodsense.lk` returns "cannot find"
 
 **Solutions:**
+
 1. Wait longer (up to 48 hours for nameserver changes)
 2. Clear your DNS cache:
    - **Windows**: `ipconfig /flushdns`
@@ -256,6 +261,7 @@ curl -k https://stg.floodsense.lk/api/users \
 **Symptom:** `nslookup` works but `curl https://stg.floodsense.lk` fails
 
 **Solutions:**
+
 1. Verify services are running on droplet:
    ```bash
    docker-compose -f docker-compose.stg.yml ps
@@ -318,6 +324,7 @@ certbot renew --dry-run
 ## Reference: Common DNS Records
 
 ### A Record (Points domain to IPv4)
+
 ```
 Name: stg
 Type: A
@@ -325,6 +332,7 @@ Value: 123.45.67.89
 ```
 
 ### CNAME Record (Points domain to another domain)
+
 ```
 Name: stg
 Type: CNAME
@@ -332,6 +340,7 @@ Value: example.com
 ```
 
 ### MX Record (Mail server)
+
 ```
 Name: @
 Type: MX
@@ -343,13 +352,13 @@ Priority: 10
 
 ## Summary
 
-| Step | Time | Action |
-|------|------|--------|
-| 1. Get droplet IP | 1 min | Run: `curl -s https://api.ipify.org` |
-| 2. Add DNS record | 5 min | Add A record in your registrar |
-| 3. Wait for propagation | 5-30 min | DNS takes time to update globally |
-| 4. Verify DNS | 2 min | Run: `nslookup stg.floodsense.lk` |
-| 5. Test endpoint | 2 min | Run: `curl -k https://stg.floodsense.lk/api/ping` |
+| Step                    | Time     | Action                                            |
+| ----------------------- | -------- | ------------------------------------------------- |
+| 1. Get droplet IP       | 1 min    | Run: `curl -s https://api.ipify.org`              |
+| 2. Add DNS record       | 5 min    | Add A record in your registrar                    |
+| 3. Wait for propagation | 5-30 min | DNS takes time to update globally                 |
+| 4. Verify DNS           | 2 min    | Run: `nslookup stg.floodsense.lk`                 |
+| 5. Test endpoint        | 2 min    | Run: `curl -k https://stg.floodsense.lk/api/ping` |
 
 **Total time: ~30-45 minutes**
 
@@ -358,16 +367,19 @@ Priority: 10
 ## Still Having Issues?
 
 1. Check Kong logs on droplet:
+
    ```bash
    docker-compose -f docker-compose.stg.yml logs kong | tail -50
    ```
 
 2. Check Nginx logs:
+
    ```bash
    tail -50 /var/log/nginx/error.log
    ```
 
 3. Verify Kong Konnect connection:
+
    ```bash
    source .env
    curl -X GET "${KONNECT_ADDR}/v2/control-planes" \

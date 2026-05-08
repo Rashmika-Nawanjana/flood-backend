@@ -1,6 +1,7 @@
 # How to Get Kong Konnect Configuration Values
 
 ## Overview
+
 This guide walks you through obtaining each environment variable needed for Kong Konnect integration.
 
 ---
@@ -8,6 +9,7 @@ This guide walks you through obtaining each environment variable needed for Kong
 ## 1️⃣ KONNECT_TOKEN - API Personal Access Token
 
 ### Where to Get It
+
 1. Go to **https://cloud.konghq.com**
 2. Click your **Profile Avatar** (top-right corner)
 3. Select **Settings** or **Personal Access Tokens**
@@ -20,17 +22,20 @@ This guide walks you through obtaining each environment variable needed for Kong
 7. **Copy the token immediately** - it only shows once!
 
 ### Example
+
 ```bash
 export KONNECT_TOKEN="kpat_abcdef1234567890_1234567890abcdef"
 ```
 
 ### ⚠️ Security Notes
+
 - **Store securely** - never commit to git
 - **Rotate regularly** - every 90 days recommended
 - **Different tokens per environment** - have separate tokens for staging and production
 - **Revoke old tokens** - delete tokens you no longer use
 
 ### What If I Lost My Token?
+
 No problem! Generate a new one. The old token becomes invalid automatically.
 
 ---
@@ -39,11 +44,11 @@ No problem! Generate a new one. The old token becomes invalid automatically.
 
 ### Standard Values (Choose One)
 
-| Region | Address | Usage |
-|--------|---------|-------|
-| **US (Default)** | `https://in.api.konghq.com` | Most users |
-| **EU** | `https://eu.api.konghq.com` | EU data residency |
-| **AU** | `https://au.api.konghq.com` | Australia region |
+| Region           | Address                     | Usage             |
+| ---------------- | --------------------------- | ----------------- |
+| **US (Default)** | `https://in.api.konghq.com` | Most users        |
+| **EU**           | `https://eu.api.konghq.com` | EU data residency |
+| **AU**           | `https://au.api.konghq.com` | Australia region  |
 
 ### How to Find Your Region
 
@@ -54,6 +59,7 @@ No problem! Generate a new one. The old token becomes invalid automatically.
    - If it contains `au.cloud.konghq.com` → Use `https://au.api.konghq.com`
 
 ### Example
+
 ```bash
 export KONNECT_ADDR="https://in.api.konghq.com"  # For US region
 ```
@@ -79,11 +85,13 @@ export KONNECT_ADDR="https://in.api.konghq.com"  # For US region
 3. Click **Create**
 
 ### Example
+
 ```bash
 export CONTROL_PLANE_NAME="Flood-Management-Gateway"
 ```
 
 ### View All Your Control Planes
+
 1. Go to **Gateway Manager** → **Control Planes**
 2. Each control plane shows:
    - Name
@@ -96,6 +104,7 @@ export CONTROL_PLANE_NAME="Flood-Management-Gateway"
 ## 4️⃣ KONNECT_NODE_NAME - Data Plane Node Name
 
 ### What Is It?
+
 The name of your Kong Data Plane instance running on DigitalOcean.
 
 ### Where to Get/Create It
@@ -107,6 +116,7 @@ The name of your Kong Data Plane instance running on DigitalOcean.
 5. If not yet deployed, you can set any name when deploying
 
 ### Common Node Names
+
 ```bash
 # Examples:
 export KONNECT_NODE_NAME="flood-stg-node"          # Staging
@@ -116,7 +126,9 @@ export KONNECT_NODE_NAME="flood-gateway-1"         # Generic
 ```
 
 ### How to Set It When Deploying
+
 When you start Kong on your DigitalOcean droplet:
+
 ```bash
 docker run -d \
   -e KONG_NODE_NAME="flood-stg-node" \
@@ -130,6 +142,7 @@ docker run -d \
 ## 5️⃣ KONNECT_REGION - Data Center Region (Optional)
 
 ### Available Regions
+
 ```bash
 # Standard regions:
 export KONNECT_REGION="us"        # United States
@@ -147,6 +160,7 @@ export KONNECT_REGION="au"        # Australia
 2. Or check when creating your control plane - it displays the region
 
 ### Example
+
 ```bash
 export KONNECT_REGION="us"
 ```
@@ -158,18 +172,21 @@ export KONNECT_REGION="us"
 ### Step-by-Step Process
 
 **Step 1: Generate API Token**
+
 ```
 Kong Konnect Dashboard → Settings → Personal Access Tokens → Generate New Token
 Copy: kpat_xxx...xxx
 ```
 
 **Step 2: Find/Create Control Plane**
+
 ```
 Kong Konnect Dashboard → Gateway Manager → Control Planes
 Find or Create: "Flood-Management-Gateway"
 ```
 
 **Step 3: Determine Region**
+
 ```
 Check browser URL:
 - cloud.konghq.com → us
@@ -178,12 +195,14 @@ Check browser URL:
 ```
 
 **Step 4: Set Node Name**
+
 ```
 Choose name like: flood-stg-node
 (You'll use this when deploying to DigitalOcean)
 ```
 
 **Step 5: Create .env.konnect**
+
 ```bash
 cp .env.konnect.template .env.konnect
 
@@ -201,6 +220,7 @@ EOF
 ## ✅ Verify Your Configuration
 
 ### Test Token & Connection
+
 ```bash
 # Source your configuration
 source .env.konnect
@@ -212,6 +232,7 @@ curl -s -X GET "${KONNECT_ADDR}/v2/control-planes" \
 ```
 
 ### Expected Output
+
 ```json
 {
   "id": "7cc4c23c-1b5b-4dad-a3a5-a3450f1e5480",
@@ -225,27 +246,29 @@ If you get this, everything is configured correctly! ✅
 
 ## 🎯 Kong Konnect Dashboard Quick Links
 
-| Page | URL | Purpose |
-|------|-----|---------|
-| Dashboard | https://cloud.konghq.com | Main dashboard |
-| API Tokens | https://cloud.konghq.com/settings/tokens | Generate/manage tokens |
-| Control Planes | https://cloud.konghq.com/gateway-manager | Manage control planes |
-| Services | `Control Plane → API Gateway → Services` | Configure services |
-| Routes | `Control Plane → API Gateway → Routes` | Configure routes |
-| Plugins | `Control Plane → API Gateway → Plugins` | Manage plugins |
-| Data Planes | `Control Plane → Data Planes` | Monitor nodes |
+| Page           | URL                                      | Purpose                |
+| -------------- | ---------------------------------------- | ---------------------- |
+| Dashboard      | https://cloud.konghq.com                 | Main dashboard         |
+| API Tokens     | https://cloud.konghq.com/settings/tokens | Generate/manage tokens |
+| Control Planes | https://cloud.konghq.com/gateway-manager | Manage control planes  |
+| Services       | `Control Plane → API Gateway → Services` | Configure services     |
+| Routes         | `Control Plane → API Gateway → Routes`   | Configure routes       |
+| Plugins        | `Control Plane → API Gateway → Plugins`  | Manage plugins         |
+| Data Planes    | `Control Plane → Data Planes`            | Monitor nodes          |
 
 ---
 
 ## 🔧 Common Commands
 
 ### Test Configuration
+
 ```bash
 source .env.konnect
 ./scripts/kong-konnect-setup.sh ping
 ```
 
 ### List All Control Planes
+
 ```bash
 source .env.konnect
 
@@ -254,6 +277,7 @@ curl -s -X GET "${KONNECT_ADDR}/v2/control-planes" \
 ```
 
 ### Get Control Plane Details
+
 ```bash
 source .env.konnect
 
@@ -266,6 +290,7 @@ curl -s -X GET "${KONNECT_ADDR}/v2/control-planes/${CP_ID}" \
 ```
 
 ### List Data Plane Nodes
+
 ```bash
 source .env.konnect
 
@@ -291,17 +316,20 @@ curl -s -X GET "${KONNECT_ADDR}/v2/control-planes/${CP_ID}/nodes" \
 ## ❓ Troubleshooting
 
 ### "Authentication Failed"
+
 - ✅ Token starts with `kpat_`?
 - ✅ Token not expired? (Check expiration date)
 - ✅ Correct API address? (should be `https://in.api.konghq.com` for US)
 - ✅ Token generated recently? (might need to regenerate if too old)
 
 ### "Control Plane Not Found"
+
 - ✅ Control plane name matches exactly? (case-sensitive)
 - ✅ Control plane created in Kong Konnect? (check dashboard)
 - ✅ Using correct region API address?
 
 ### "Cannot Connect to Kong Konnect"
+
 - ✅ Internet connection working?
 - ✅ No firewall blocking HTTPS to `in.api.konghq.com`?
 - ✅ Try: `curl -I https://in.api.konghq.com`

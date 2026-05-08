@@ -226,19 +226,27 @@ jobs:
             # Navigate to project directory
             cd /opt/flood-backend
             
-            # Stash any local changes (e.g., .env.stg from previous runs)
-            git stash || true
-            
-            # Pull latest code
+            # Back up .env.stg before git operations (it's gitignored but tracked as deleted)
+            if [ -s .env.stg ]; then
+              cp .env.stg /tmp/.env.stg.bak
+              echo "✓ Backed up .env.stg before git operations"
+            fi
+
+            # Pull latest code (reset first to fix tracked-deleted .env.stg issue)
             echo "📥 Pulling latest code from stg branch..."
             git fetch origin
             git checkout stg
-            git pull origin stg
-            
+            git reset --hard origin/stg
+            git clean -fd --exclude='.env.stg' --exclude='.env.stg.bak'
+
+            # Restore .env.stg after git reset
+            if [ -s /tmp/.env.stg.bak ]; then
+              cp /tmp/.env.stg.bak .env.stg
+              echo "✓ Restored .env.stg after git reset"
+            fi
+
             # Update environment file
             echo "🔧 Updating environment configuration..."
-            # Remove .env.stg from git tracking (if it was ever committed)
-            git rm --cached .env.stg 2>/dev/null || true
             
             # Back up existing env file before attempting overwrite
             if [ -s .env.stg ]; then
@@ -299,6 +307,9 @@ jobs:
               echo "LOG_OUTPUT=stdout" >> .env.stg
               echo "HEALTH_CHECK_INTERVAL=30" >> .env.stg
               echo "HEALTH_CHECK_TIMEOUT=10" >> .env.stg
+              echo "" >> .env.stg
+              echo "PGADMIN_EMAIL=admin@floodsense.lk" >> .env.stg
+              echo "PGADMIN_PASSWORD=pgadmin_stg_2026" >> .env.stg
             fi
 
             # Append individual secrets if provided and not already present

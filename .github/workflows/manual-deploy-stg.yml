@@ -87,6 +87,9 @@ jobs:
               echo "LOG_OUTPUT=stdout" >> .env.stg
               echo "HEALTH_CHECK_INTERVAL=30" >> .env.stg
               echo "HEALTH_CHECK_TIMEOUT=10" >> .env.stg
+              echo "" >> .env.stg
+              echo "PGADMIN_EMAIL=admin@floodsense.lk" >> .env.stg
+              echo "PGADMIN_PASSWORD=pgadmin_stg_2026" >> .env.stg
             fi
 
             ACTION="${{ github.event.inputs.action }}"

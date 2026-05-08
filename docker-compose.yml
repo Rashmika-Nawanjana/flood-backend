@@ -185,8 +185,10 @@ services:
     image: grafana/grafana:latest
     container_name: flood-grafana
     environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
+     GF_SECURITY_ADMIN_USER: admin
+     GF_SECURITY_ADMIN_PASSWORD: admin
+     TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+     TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
     ports:
       - "3010:3000"
     depends_on:
@@ -197,6 +199,7 @@ services:
     - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
     - ./monitoring/grafana/provisioning/alerting:/etc/grafana/provisioning/alerting   
     - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+    
   node-exporter:
     image: prom/node-exporter:latest
     container_name: flood-node-exporter

@@ -1,0 +1,123 @@
+{
+  "uid": "flood-loki-dashboard",
+  "title": "Flood System - Loki Logs",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "container",
+        "type": "query",
+        "datasource": "Loki",
+        "query": "label_values(container_name)",
+        "refresh": 1,
+        "includeAll": true,
+        "allValue": ".*"
+      },
+      {
+        "name": "service",
+        "type": "query",
+        "datasource": "Loki",
+        "query": "label_values(service)",
+        "refresh": 1,
+        "includeAll": true,
+        "allValue": ".*"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "API Logs (Flood Backend)",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "expr": "{container_name=~\"$container\", service=~\"$service\"}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Error Logs (All Services)",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "{container_name=~\"$container\"} |= \"error\""
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Warnings",
+      "type": "logs",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "{container_name=~\"$container\"} |= \"warn\""
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "API Service Logs Only",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "{container_name=\"flood-api\"}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Grafana Logs",
+      "type": "logs",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "{container_name=\"flood-grafana\"}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Promtail Logs (Log Shipping)",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 24, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "expr": "{job=\"flood-promtail\"}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Log Volume (All Containers)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 32, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "expr": "count_over_time({container_name=~\".+\"}[5m])"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Critical Errors Only",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 40, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "expr": "{container_name=~\"$container\"} |= \"error\" |= \"fatal\""
+        }
+      ]
+    }
+  ]
+}

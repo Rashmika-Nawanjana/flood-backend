@@ -1,7 +1,7 @@
 """Update rivers linkage and flood predictions schema.
 
 Revision ID: 0005_schema_updates
-Revises: 0004_add_zone_id_to_users
+Revises: 0004_schema_updates
 Create Date: 2026-05-06 00:00:00.000000
 
 Loads schema from migrations/sql/0005_schema_updates.sql
@@ -13,7 +13,7 @@ import os
 from alembic import op
 
 revision = "0005_schema_updates"
-down_revision = "0004_add_zone_id_to_users"
+down_revision = "0004_schema_updates"
 
 
 def _exec_sql_file(filename: str) -> None:

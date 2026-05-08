@@ -12,8 +12,8 @@ ALTER TABLE IF EXISTS zones
     ALTER COLUMN river_id DROP NOT NULL;
 
 -- Ensure a default Mahaweli River exists and backfill NULL zone river_id values
-INSERT INTO rivers (river_name, description)
-SELECT 'Mahaweli River', 'Seeded default Mahaweli River for backfill and testing'
+INSERT INTO rivers (river_name)
+SELECT 'Mahaweli River'
 WHERE NOT EXISTS (SELECT 1 FROM rivers WHERE river_name = 'Mahaweli River');
 
 UPDATE zones

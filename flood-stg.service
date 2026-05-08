@@ -1,0 +1,22 @@
+[Unit]
+Description=FloodSense Staging Deployment
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/flood-backend
+ExecStart=/usr/local/bin/docker-compose -f docker-compose.stg.yml up
+ExecStop=/usr/local/bin/docker-compose -f docker-compose.stg.yml down
+Restart=unless-stopped
+RestartSec=10s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=flood-stg
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

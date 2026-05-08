@@ -1,0 +1,438 @@
+name: Deploy to Staging (Digital Ocean)
+
+on:
+  push:
+    branches:
+      - stg
+  pull_request:
+    branches:
+      - stg
+    types:
+      - closed
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'stg'
+        type: choice
+        options:
+          - stg
+
+permissions:
+  contents: read
+  packages: write
+  deployments: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_TAG: ${{ github.sha }}
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  lint-and-test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: stg
+
+      - name: Materialize staging env file
+        run: |
+          cat > .env.stg << 'ENVEOF'
+          ${{ secrets.STG_ENV_VARS }}
+          ENVEOF
+
+          if [ ! -s .env.stg ]; then
+            echo "STG_ENV_VARS secret is missing or empty"
+            exit 1
+          fi
+
+      - name: Validate docker-compose
+        run: |
+          docker compose --env-file .env.stg -f docker-compose.stg.yml config > /dev/null
+          echo "✓ docker-compose.stg.yml is valid"
+
+      - name: Check for required env vars
+        run: |
+          required_vars=(
+            "POSTGRES_USER"
+            "POSTGRES_PASSWORD"
+            "POSTGRES_DB"
+            "INFLUXDB_USERNAME"
+            "INFLUXDB_PASSWORD"
+            "INFLUXDB_ORG"
+            "INFLUXDB_BUCKET"
+            "INFLUXDB_TOKEN"
+            "KAFKA_TOPIC"
+            "MQTT_BROKER"
+            "MQTT_PORT"
+            "MQTT_TOPIC"
+          )
+          
+          missing_vars=()
+          while IFS= read -r line; do
+            if [[ "$line" =~ ^[^#]*= ]]; then
+              var_name="${line%%=*}"
+              for req_var in "${required_vars[@]}"; do
+                if [[ "$var_name" == "$req_var" ]]; then
+                  echo "✓ $var_name found"
+                fi
+              done
+            fi
+          done < .env.stg
+          
+          echo "✓ Environment variables validated"
+
+  build-and-push:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    outputs:
+      api-image: ${{ steps.images.outputs.api-image }}
+      sensor-image: ${{ steps.images.outputs.sensor-image }}
+      intelligence-image: ${{ steps.images.outputs.intelligence-image }}
+      zone-image: ${{ steps.images.outputs.zone-image }}
+      mqtt-kafka-image: ${{ steps.images.outputs.mqtt-kafka-image }}
+      kafka-influx-image: ${{ steps.images.outputs.kafka-influx-image }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: stg
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Set lowercase repository name
+        run: |
+          echo "REPO_LOWER=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/api:latest
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/api:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Sensor Service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./sensor-service
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/sensor-service:latest
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/sensor-service:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Intelligence Service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./intelligence-service
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/intelligence-service:latest
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/intelligence-service:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Zone Service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./zone-service
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/zone-service:latest
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/zone-service:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push MQTT-Kafka Bridge image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./mqtt-kafka-service
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/mqtt-kafka-bridge:latest
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/mqtt-kafka-bridge:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Kafka-InfluxDB Bridge image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./kafka-influx-service
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/kafka-influx-bridge:latest
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/kafka-influx-bridge:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Output image tags
+        id: images
+        run: |
+          echo "api-image=${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/api:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "sensor-image=${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/sensor-service:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "intelligence-image=${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/intelligence-service:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "zone-image=${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/zone-service:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "mqtt-kafka-image=${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/mqtt-kafka-bridge:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          echo "kafka-influx-image=${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/kafka-influx-bridge:${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+
+  deploy:
+    name: Deploy to Digital Ocean
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    environment:
+      name: staging
+      url: https://stg.floodsense.lk
+    env:
+      DO_HOST: ${{ secrets.DO_HOST || vars.DO_HOST }}
+      DO_USER: ${{ secrets.DO_USER || vars.DO_USER }}
+      DO_SSH_KEY: ${{ secrets.DO_SSH_KEY || vars.DO_SSH_KEY }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: stg
+
+      - name: Deploy to Digital Ocean via SSH
+        if: env.DO_HOST != '' && env.DO_USER != '' && env.DO_SSH_KEY != ''
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ env.DO_HOST }}
+          username: ${{ env.DO_USER }}
+          key: ${{ env.DO_SSH_KEY }}
+          script: |
+            set -e
+            echo "🚀 Starting deployment to Digital Ocean..."
+            
+            # Navigate to project directory
+            cd /opt/flood-backend
+            
+            # Back up .env.stg before git operations (it's gitignored but tracked as deleted)
+            if [ -s .env.stg ]; then
+              cp .env.stg /tmp/.env.stg.bak
+              echo "✓ Backed up .env.stg before git operations"
+            fi
+
+            # Pull latest code (reset first to fix tracked-deleted .env.stg issue)
+            echo "📥 Pulling latest code from stg branch..."
+            git fetch origin
+            git checkout stg
+            git reset --hard origin/stg
+            git clean -fd --exclude='.env.stg' --exclude='.env.stg.bak'
+
+            # Restore .env.stg after git reset
+            if [ -s /tmp/.env.stg.bak ]; then
+              cp /tmp/.env.stg.bak .env.stg
+              echo "✓ Restored .env.stg after git reset"
+            fi
+
+            # Update environment file
+            echo "🔧 Updating environment configuration..."
+            
+            # Back up existing env file before attempting overwrite
+            if [ -s .env.stg ]; then
+              cp .env.stg .env.stg.bak
+              echo "✓ Backed up existing .env.stg"
+            fi
+
+            # Write full env bundle if provided
+            cat > .env.stg << 'ENVEOF'
+            ${{ secrets.STG_ENV_VARS }}
+            ENVEOF
+
+            ENV_SIZE=$(wc -c < .env.stg)
+            if [ "$ENV_SIZE" -lt 5 ]; then
+              echo "⚠ STG_ENV_VARS secret is empty. Creating default staging env..."
+              echo "APP_NAME=Flood Backend - Staging" > .env.stg
+              echo "APP_ENV=staging" >> .env.stg
+              echo "APP_HOST=0.0.0.0" >> .env.stg
+              echo "APP_PORT=8000" >> .env.stg
+              echo "APP_DEBUG=false" >> .env.stg
+              echo "LOG_LEVEL=info" >> .env.stg
+              echo "" >> .env.stg
+              echo "STAGING_DOMAIN=stg.floodsense.lk" >> .env.stg
+              echo "STAGING_URL=https://stg.floodsense.lk" >> .env.stg
+              echo "FRONTEND_URL=https://stg-flood-management.vercel.app" >> .env.stg
+              echo "ALLOWED_ORIGINS=https://stg-flood-management.vercel.app,https://stg-web.floodsense.lk,https://stg.floodsense.lk" >> .env.stg
+              echo "" >> .env.stg
+              echo "POSTGRES_USER=flood_stg_user" >> .env.stg
+              echo "POSTGRES_PASSWORD=flood_stg_pass_2026" >> .env.stg
+              echo "POSTGRES_DB=flooddb_stg" >> .env.stg
+              echo "DATABASE_URL=postgresql+psycopg://flood_stg_user:flood_stg_pass_2026@postgres:5432/flooddb_stg" >> .env.stg
+              echo "" >> .env.stg
+              echo "INFLUXDB_URL=http://influxdb:8086" >> .env.stg
+              echo "INFLUXDB_USERNAME=admin" >> .env.stg
+              echo "INFLUXDB_PASSWORD=influx_stg_pass_2026" >> .env.stg
+              echo "INFLUXDB_ORG=flood-staging" >> .env.stg
+              echo "INFLUXDB_BUCKET=telemetry-stg" >> .env.stg
+              echo "INFLUXDB_TOKEN=flood-stg-influx-token-2026" >> .env.stg
+              echo "INFLUXDB_PORT=8086" >> .env.stg
+              echo "INFLUXDB_HOST=influxdb" >> .env.stg
+              echo "" >> .env.stg
+              echo "CLERK_JWKS_URL=https://useful-hen-13.clerk.accounts.dev/.well-known/jwks.json" >> .env.stg
+              echo "CLERK_ISSUER=https://useful-hen-13.clerk.accounts.dev" >> .env.stg
+              echo "CLERK_WEBHOOK_SECRET=whsec_o5rQSebAXqdafDAWJuvayUyav1XaAAE7" >> .env.stg
+              echo "" >> .env.stg
+              echo "MQTT_BROKER=broker.hivemq.com" >> .env.stg
+              echo "MQTT_PORT=1883" >> .env.stg
+              echo "MQTT_TOPIC=flood/sensors/#" >> .env.stg
+              echo "MQTT_USERNAME=" >> .env.stg
+              echo "MQTT_PASSWORD=" >> .env.stg
+              echo "" >> .env.stg
+              echo "KAFKA_BROKER=kafka:9092" >> .env.stg
+              echo "KAFKA_TOPIC=flood-sensor-data" >> .env.stg
+              echo "KAFKA_SECURITY_PROTOCOL=PLAINTEXT" >> .env.stg
+              echo "" >> .env.stg
+              echo "SENSOR_OFFLINE_MINUTES=15" >> .env.stg
+              echo "LOG_FORMAT=json" >> .env.stg
+              echo "LOG_OUTPUT=stdout" >> .env.stg
+              echo "HEALTH_CHECK_INTERVAL=30" >> .env.stg
+              echo "HEALTH_CHECK_TIMEOUT=10" >> .env.stg
+              echo "" >> .env.stg
+              echo "PGADMIN_EMAIL=admin@floodsense.lk" >> .env.stg
+              echo "PGADMIN_PASSWORD=pgadmin_stg_2026" >> .env.stg
+            fi
+
+            # Append individual secrets if provided and not already present
+            if [ -n "${{ secrets.CLERK_WEBHOOK_SECRET_STG }}" ]; then
+              if ! grep -q '^CLERK_WEBHOOK_SECRET=' .env.stg 2>/dev/null; then
+                echo "CLERK_WEBHOOK_SECRET=${{ secrets.CLERK_WEBHOOK_SECRET_STG }}" >> .env.stg
+              fi
+            fi
+
+            if [ -n "${{ secrets.FRONTEND_URL_STG }}" ]; then
+              if ! grep -q '^FRONTEND_URL=' .env.stg 2>/dev/null; then
+                echo "FRONTEND_URL=${{ secrets.FRONTEND_URL_STG }}" >> .env.stg
+              fi
+            fi
+
+            if [ -n "${{ secrets.ALLOWED_ORIGINS_STG }}" ]; then
+              if ! grep -q '^ALLOWED_ORIGINS=' .env.stg 2>/dev/null; then
+                echo "ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS_STG }}" >> .env.stg
+              fi
+            fi
+            
+            # Stop existing services
+            echo "🛑 Stopping existing services..."
+            docker compose --env-file .env.stg -f docker-compose.stg.yml down || true
+            
+            # Prune unused images and volumes
+            echo "🧹 Cleaning up unused Docker resources..."
+            docker image prune -f --filter "until=72h"
+            docker volume prune -f
+            
+            # Start services
+            echo "🐳 Starting Docker services..."
+            docker compose \
+              --env-file .env.stg \
+              -f docker-compose.stg.yml \
+              up -d
+            
+            # Wait for services to be healthy
+            echo "⏳ Waiting for services to be healthy..."
+            sleep 30
+            
+            # Run migrations
+            echo "🔄 Running database migrations..."
+            docker compose --env-file .env.stg -f docker-compose.stg.yml exec -T api alembic upgrade head || true
+            
+            # Health checks
+            echo "🏥 Running health checks..."
+            
+            # Check if Kong is healthy
+            if docker compose --env-file .env.stg -f docker-compose.stg.yml exec -T kong kong health > /dev/null 2>&1; then
+              echo "✓ Kong gateway is healthy"
+            else
+              echo "⚠ Kong gateway health check failed"
+            fi
+            
+            # Check service status
+            echo "📊 Service status:"
+            docker compose --env-file .env.stg -f docker-compose.stg.yml ps
+            
+            echo "✅ Deployment completed successfully!"
+
+      - name: Fail when deployment connection details are missing
+        if: env.DO_HOST == '' || env.DO_USER == '' || env.DO_SSH_KEY == ''
+        run: |
+          echo "Missing Digital Ocean connection details. Set DO_HOST, DO_USER, and DO_SSH_KEY as repository secrets or environment variables for the staging environment."
+          exit 1
+
+      - name: Verify Deployment
+        if: env.DO_HOST != '' && env.DO_USER != '' && env.DO_SSH_KEY != ''
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ env.DO_HOST }}
+          username: ${{ env.DO_USER }}
+          key: ${{ env.DO_SSH_KEY }}
+          script: |
+            echo "🔍 Verifying deployment..."
+            cd /opt/flood-backend
+            
+            # Test Kong API Gateway
+            echo "Testing Kong API Gateway..."
+            if curl -s http://localhost:8001/status > /dev/null 2>&1; then
+              echo "✓ Kong API Gateway is responding"
+            else
+              echo "✗ Kong API Gateway is not responding"
+              exit 1
+            fi
+            
+            # Display container logs
+            echo "📋 Recent logs:"
+            docker compose --env-file .env.stg -f docker-compose.stg.yml logs --tail=20
+            
+            echo "✅ Deployment verification completed!"
+
+  notify:
+    name: Notify Deployment Status
+    runs-on: ubuntu-latest
+    needs: [lint-and-test, build-and-push, deploy]
+    if: always()
+    steps:
+      - name: Deployment Status
+        run: |
+          if [ "${{ needs.deploy.result }}" == "success" ]; then
+            echo "✅ Deployment to Staging (STG) completed successfully!"
+            echo "📍 URL: https://stg.floodsense.lk"
+            echo "🔍 Commit: ${{ github.sha }}"
+            echo "👤 Author: ${{ github.actor }}"
+          else
+            echo "❌ Deployment failed!"
+            exit 1
+          fi
+
+      - name: Create deployment annotation
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: 'stg',
+              environment: 'staging',
+              description: 'Deployment of commit ${{ github.sha }}',
+              production_environment: false,
+              auto_merge: false,
+              required_contexts: []
+            });

@@ -14,7 +14,7 @@ import logging
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr
 
 from app.auth.clerk import require_roles
@@ -47,6 +47,7 @@ class UserUpdatePayload(BaseModel):
     full_name: Optional[str] = None
     role: Optional[str] = None
     zone_id: Optional[str] = None
+    is_active: Optional[bool] = None
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -215,15 +216,28 @@ def create_user(payload: UserCreatePayload) -> dict:
 
 
 @router.get("")
-def list_users() -> dict:
-    """Return all rows from the users table."""
+def list_users(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+) -> dict:
+    """Return paginated users from the users table."""
+    offset = (page - 1) * page_size
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT * FROM users ORDER BY created_at DESC")
+            cur.execute("SELECT COUNT(*) AS total FROM users")
+            total = cur.fetchone()["total"]
+            cur.execute(
+                "SELECT * FROM users ORDER BY created_at DESC LIMIT %s OFFSET %s",
+                (page_size, offset),
+            )
             rows = cur.fetchall()
 
     return {
         "status": "success",
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": max(1, -(-total // page_size)),
         "count": len(rows),
         "data": [_serialize_user(r) for r in rows],
     }
@@ -255,6 +269,9 @@ def update_user(clerk_id: str, payload: UserUpdatePayload) -> dict:
     )
     new_role = (
         payload.role if payload.role is not None else existing["role"]
+    )
+    new_is_active = (
+        payload.is_active if payload.is_active is not None else existing["is_active"]
     )
 
     # Determine zone_id: explicit payload value wins, otherwise keep existing.
@@ -302,11 +319,12 @@ def update_user(clerk_id: str, payload: UserUpdatePayload) -> dict:
                 SET full_name  = %s,
                     role       = %s,
                     zone_id    = %s,
+                    is_active  = %s,
                     updated_at = NOW()
                 WHERE clerk_id = %s
                 RETURNING *
                 """,
-                (new_full_name, new_role, new_zone_id, clerk_id),
+                (new_full_name, new_role, new_zone_id, new_is_active, clerk_id),
             )
             row = cur.fetchone()
 

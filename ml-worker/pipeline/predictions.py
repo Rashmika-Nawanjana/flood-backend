@@ -161,6 +161,93 @@ def publish_zone_events(producer, analytics_topic: str, alerts_topic: str, summa
         )
 
 
+def write_prediction_return_id(database_url: str, model_id: int, zone_id: str, water_level: dict) -> int:
+    insert = """
+        INSERT INTO flood_predictions (zone_id, model_id, water_level)
+        VALUES (%s, %s, %s)
+        RETURNING prediction_id
+    """
+    with psycopg.connect(database_url, row_factory=dict_row) as conn:
+        with conn.cursor() as cur:
+            cur.execute(insert, (zone_id, model_id, Json(water_level)))
+            row = cur.fetchone()
+            conn.commit()
+            return int(row["prediction_id"])
+
+
+def publish_zone_events(producer, analytics_topic: str, alerts_topic: str, summary: dict, database_url: str | None = None) -> None:
+    producer.send(
+        analytics_topic,
+        event_payload(
+            "zone:risk:update",
+            {
+                "zone_id": summary["zone_id"],
+                "zone_name": summary["zone_name"],
+                "previous_level": "UNKNOWN",
+                "current_level": summary["severity"],
+                "risk_score": summary["risk_score"],
+                "color_code": summary["color_code"],
+            },
+        ),
+    )
+
+    producer.send(
+        analytics_topic,
+        event_payload(
+            "prediction:new",
+            {
+                "prediction_id": summary.get("prediction_id"),
+                "zone_id": summary["zone_id"],
+                "zone_name": summary["zone_name"],
+                "predicted_peak_level_m": summary["predicted_peak_level_m"],
+                "estimated_flood_time": summary["estimated_flood_time"],
+                "severity": summary["severity"],
+                "top_risk_factors": [
+                    {
+                        "factor": "Predicted Peak Water Level",
+                        "value": f"{summary['predicted_peak_level_m']}m",
+                        "impact": "High" if summary["severity"] in {"HIGH", "CRITICAL"} else "Medium",
+                    }
+                ],
+            },
+        ),
+    )
+
+    if summary["severity"] in {"HIGH", "CRITICAL"}:
+        alert_id = f"ALT-{safe_name(summary['zone_id'])}-{int(datetime.now(timezone.utc).timestamp())}"
+        producer.send(
+            alerts_topic,
+            event_payload(
+                "alert:new",
+                {
+                    "alert_id": alert_id,
+                    "zone_id": summary["zone_id"],
+                    "severity": summary["severity"],
+                    "title": f"Flood risk {summary['severity']} in {summary['zone_name']}",
+                    "message": "Predicted water levels indicate elevated flood risk. Review preparedness actions.",
+                    "recommended_action": "EVACUATE" if summary["severity"] == "CRITICAL" else "PREPARE",
+                    "recommended_shelters": [],
+                },
+            ),
+        )
+
+        # persist alert event linking to prediction if database_url and prediction_db_id available
+        try:
+            pred_db_id = summary.get("prediction_db_id")
+            if database_url and pred_db_id is not None:
+                insert_alert = """
+                    INSERT INTO alert_events (prediction_id, triggered_at)
+                    VALUES (%s, NOW())
+                """
+                with psycopg.connect(database_url) as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(insert_alert, (int(pred_db_id),))
+                    conn.commit()
+        except Exception:
+            # persistence errors should not stop event publishing
+            pass
+
+
 def resolve_model_id(database_url: str, explicit: int | None) -> int:
     if explicit is not None:
         return explicit

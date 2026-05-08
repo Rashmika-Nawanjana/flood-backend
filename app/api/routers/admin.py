@@ -64,10 +64,20 @@ class ZoneCreatePayload(BaseModel):
     geometry: ZoneGeometry
     population_at_risk: int
     description: str
+    river_id: int
+    prev_zone_id: str | None = None
+    next_zone_id: str | None = None
 
 
 class ZoneUpdatePayload(BaseModel):
     geometry: ZoneGeometry
+    river_id: int | None = None
+    prev_zone_id: str | None = None
+    next_zone_id: str | None = None
+
+
+class RiverCreatePayload(BaseModel):
+    river_name: str
 
 
 class ShelterCreatePayload(BaseModel):
@@ -144,6 +154,32 @@ def create_sensor(payload: SensorCreatePayload) -> dict:
     return {"status": "success", "data": row}
 
 
+@router.post("/rivers")
+def create_river(payload: RiverCreatePayload) -> dict:
+    insert = """
+    INSERT INTO rivers (river_name)
+    VALUES (%s)
+    ON CONFLICT (river_name) DO UPDATE SET
+      river_name = EXCLUDED.river_name
+    RETURNING *
+    """
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(insert, (payload.river_name,))
+            row = cur.fetchone()
+    return {"status": "success", "data": row}
+
+
+@router.get("/rivers")
+def list_rivers() -> dict:
+    query = "SELECT river_id, river_name FROM rivers ORDER BY river_id"
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query)
+            rows = cur.fetchall()
+    return {"status": "success", "count": len(rows), "data": rows}
+
+
 @router.patch("/sensors/{sensor_id}")
 def update_sensor(sensor_id: str, payload: SensorUpdatePayload) -> dict:
     data = payload.model_dump()
@@ -189,13 +225,19 @@ def delete_sensor(sensor_id: str) -> dict:
 @router.post("/zones")
 def create_zone(payload: ZoneCreatePayload) -> dict:
     insert = """
-    INSERT INTO zones (zone_id, zone_name, geometry, population_at_risk, description, last_updated)
-    VALUES (%s,%s,%s,%s,%s,NOW())
+    INSERT INTO zones (
+        zone_id, zone_name, geometry, population_at_risk, description,
+        river_id, prev_zone_id, next_zone_id, last_updated
+    )
+    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,NOW())
     ON CONFLICT (zone_id) DO UPDATE SET
       zone_name = EXCLUDED.zone_name,
       geometry = EXCLUDED.geometry,
       population_at_risk = EXCLUDED.population_at_risk,
       description = EXCLUDED.description,
+      river_id = EXCLUDED.river_id,
+      prev_zone_id = EXCLUDED.prev_zone_id,
+      next_zone_id = EXCLUDED.next_zone_id,
       last_updated = NOW()
     RETURNING *
     """
@@ -206,22 +248,55 @@ def create_zone(payload: ZoneCreatePayload) -> dict:
         Json(data.get("geometry")),
         data.get("population_at_risk"),
         data.get("description"),
+        data.get("river_id"),
+        data.get("prev_zone_id"),
+        data.get("next_zone_id"),
     )
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(insert, params)
-            row = cur.fetchone()
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(insert, params)
+                row = cur.fetchone()
+    except psycopg.errors.ForeignKeyViolation as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid river_id, prev_zone_id, or next_zone_id for zone",
+        ) from exc
     return {"status": "success", "data": row}
 
 
 @router.patch("/zones/{zone_id}")
 def update_zone(zone_id: str, payload: ZoneUpdatePayload) -> dict:
     data = payload.model_dump()
-    update = "UPDATE zones SET geometry = %s, last_updated = NOW() WHERE zone_id = %s RETURNING *"
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(update, (Json(data.get("geometry")), zone_id))
-            row = cur.fetchone()
+    update = """
+    UPDATE zones SET
+        geometry = %s,
+        river_id = COALESCE(%s, river_id),
+        prev_zone_id = COALESCE(%s, prev_zone_id),
+        next_zone_id = COALESCE(%s, next_zone_id),
+        last_updated = NOW()
+    WHERE zone_id = %s
+    RETURNING *
+    """
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    update,
+                    (
+                        Json(data.get("geometry")),
+                        data.get("river_id"),
+                        data.get("prev_zone_id"),
+                        data.get("next_zone_id"),
+                        zone_id,
+                    ),
+                )
+                row = cur.fetchone()
+    except psycopg.errors.ForeignKeyViolation as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid river_id, prev_zone_id, or next_zone_id for zone",
+        ) from exc
     if not row:
         raise HTTPException(status_code=404, detail="Zone not found")
     return {"status": "success", "data": row}

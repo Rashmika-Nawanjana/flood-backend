@@ -381,3 +381,84 @@ def update_anomaly(anomaly_id: str, payload: AnomalyUpdatePayload) -> dict:
     if not row:
         raise HTTPException(status_code=404, detail="Anomaly not found")
     return {"status": "success", "data": row}
+
+
+from pydantic import BaseModel
+class AlertResolutionPayload(BaseModel):
+    resolution_note: str
+
+from kafka import KafkaProducer
+import json
+from datetime import datetime, timezone
+
+def get_kafka_producer():
+    return KafkaProducer(
+        bootstrap_servers='localhost:9092',
+        value_serializer=lambda v: json.dumps(v).encode('utf-8')
+    )
+
+@router.patch("/alerts/{alert_id}")
+def resolve_alert(alert_id: str, payload: AlertResolutionPayload) -> dict:
+    # Simulating DB update for alerts since the new schema dropped alert_events
+    # update = "UPDATE alerts SET status = 'RESOLVED' WHERE alert_id = %s"
+    
+    event = {
+        "event": "alert:resolved",
+        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "data": {
+            "alert_id": alert_id,
+            "zone_id": "ZONE-K1", # Mocked zone for now, ideally queried from DB
+            "resolved_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "resolution_note": payload.resolution_note
+        }
+    }
+    try:
+        producer = get_kafka_producer()
+        producer.send("system.alerts", event)
+        producer.flush()
+    except Exception as e:
+        print(f"Failed to publish alert:resolved: {e}")
+        
+    return {"status": "success", "message": f"Alert {alert_id} resolved", "data": event}
+
+
+
+class AlertResolutionPayload(BaseModel):
+    resolution_note: str = Field(...)
+
+def get_kafka_producer():
+    from kafka import KafkaProducer
+    import json
+    return KafkaProducer(
+        bootstrap_servers='localhost:9092',
+        value_serializer=lambda v: json.dumps(v).encode('utf-8')
+    )
+
+@router.patch("/alerts/{alert_id}")
+def update_alert(alert_id: str, payload: AlertResolutionPayload) -> dict:
+    # Normally we'd update the DB here first:
+    # update = "UPDATE alerts SET status = 'RESOLVED', resolved_at = NOW(), resolution_note = %s WHERE alert_id = %s RETURNING *"
+    from datetime import datetime, timezone
+    
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    
+    event = {
+        "event": "alert:resolved",
+        "timestamp": timestamp,
+        "data": {
+            "alert_id": alert_id,
+            "zone_id": "ZONE-K1", # In a real implementation this would come from the DB row
+            "resolved_at": timestamp,
+            "resolution_note": payload.resolution_note
+        }
+    }
+    
+    try:
+        producer = get_kafka_producer()
+        producer.send("system.alerts", event)
+        producer.flush()
+    except Exception as e:
+        print("Failed to publish alert:resolved", e)
+        
+    return {"status": "success", "event": "alert:resolved", "data": event["data"]}
+

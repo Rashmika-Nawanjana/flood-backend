@@ -152,6 +152,8 @@ services:
       KONG_DATABASE: "off"
       KONG_CLUSTER_CONTROL_PLANE: in.api.konghq.com:443
       KONG_CLUSTER_TELEMETRY_ENDPOINT: in.telemetry.konghq.com:443
+      KONG_CLUSTER_SERVER_NAME: in.api.konghq.com
+      KONG_CLUSTER_TELEMETRY_SERVER_NAME: in.telemetry.konghq.com
       KONG_CLUSTER_CERT: /etc/kong/certs/tls.crt
       KONG_CLUSTER_CERT_KEY: /etc/kong/certs/tls.key
       KONG_CLUSTER_MTLS_ENABLED: "on"
@@ -168,7 +170,6 @@ services:
       - "80:80"
       - "127.0.0.1:8001:8001"
       - "127.0.0.1:8100:8100"
-      - "8443:8443"
     volumes:
       - ./certs:/etc/kong/certs:ro
     restart: unless-stopped

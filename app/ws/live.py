@@ -44,7 +44,9 @@ OFFLINE_THRESHOLD_SECONDS = int(os.getenv("SENSOR_OFFLINE_THRESHOLD_SEC", "300")
 WATCHDOG_INTERVAL_SECONDS = int(os.getenv("SENSOR_WATCHDOG_INTERVAL_SEC", "60"))
 
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
-app = socketio.ASGIApp(sio)
+# Starlette 0.46+ no longer strips the mount prefix from scope["path"] before
+# passing to sub-apps, so ASGIApp must match the full path including the mount point.
+app = socketio.ASGIApp(sio, socketio_path="/ws/live/socket.io")
 
 _tasks_started = False
 _task_lock = asyncio.Lock()

@@ -383,82 +383,69 @@ def update_anomaly(anomaly_id: str, payload: AnomalyUpdatePayload) -> dict:
     return {"status": "success", "data": row}
 
 
+import json
+import os
+from datetime import datetime, timezone
+
+from kafka import KafkaProducer
 from pydantic import BaseModel
+
+
 class AlertResolutionPayload(BaseModel):
     resolution_note: str
 
-from kafka import KafkaProducer
-import json
-from datetime import datetime, timezone
 
-def get_kafka_producer():
-    return KafkaProducer(
-        bootstrap_servers='localhost:9092',
-        value_serializer=lambda v: json.dumps(v).encode('utf-8')
-    )
+_alert_producer: KafkaProducer | None = None
+
+
+def _get_alert_producer() -> KafkaProducer:
+    global _alert_producer
+    if _alert_producer is None:
+        _alert_producer = KafkaProducer(
+            bootstrap_servers=os.getenv("KAFKA_BROKER", "kafka:9092"),
+            value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+        )
+    return _alert_producer
+
+
+def _lookup_alert_zone(alert_id: str) -> str | None:
+    """Resolve the zone_id for an alert by joining alerts → predictions → zones."""
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT zone_id FROM alerts WHERE alert_id = %s LIMIT 1
+                    """,
+                    (alert_id,),
+                )
+                row = cur.fetchone()
+                if row:
+                    return row.get("zone_id") if isinstance(row, dict) else row[0]
+    except Exception:
+        pass
+    return None
+
 
 @router.patch("/alerts/{alert_id}")
 def resolve_alert(alert_id: str, payload: AlertResolutionPayload) -> dict:
-    # Simulating DB update for alerts since the new schema dropped alert_events
-    # update = "UPDATE alerts SET status = 'RESOLVED' WHERE alert_id = %s"
-    
-    event = {
-        "event": "alert:resolved",
-        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "data": {
-            "alert_id": alert_id,
-            "zone_id": "ZONE-K1", # Mocked zone for now, ideally queried from DB
-            "resolved_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "resolution_note": payload.resolution_note
-        }
-    }
-    try:
-        producer = get_kafka_producer()
-        producer.send("system.alerts", event)
-        producer.flush()
-    except Exception as e:
-        print(f"Failed to publish alert:resolved: {e}")
-        
-    return {"status": "success", "message": f"Alert {alert_id} resolved", "data": event}
-
-
-
-class AlertResolutionPayload(BaseModel):
-    resolution_note: str = Field(...)
-
-def get_kafka_producer():
-    from kafka import KafkaProducer
-    import json
-    return KafkaProducer(
-        bootstrap_servers='localhost:9092',
-        value_serializer=lambda v: json.dumps(v).encode('utf-8')
-    )
-
-@router.patch("/alerts/{alert_id}")
-def update_alert(alert_id: str, payload: AlertResolutionPayload) -> dict:
-    # Normally we'd update the DB here first:
-    # update = "UPDATE alerts SET status = 'RESOLVED', resolved_at = NOW(), resolution_note = %s WHERE alert_id = %s RETURNING *"
-    from datetime import datetime, timezone
-    
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    
+    zone_id = _lookup_alert_zone(alert_id)
     event = {
         "event": "alert:resolved",
         "timestamp": timestamp,
         "data": {
             "alert_id": alert_id,
-            "zone_id": "ZONE-K1", # In a real implementation this would come from the DB row
+            "zone_id": zone_id,
             "resolved_at": timestamp,
-            "resolution_note": payload.resolution_note
-        }
+            "resolution_note": payload.resolution_note,
+        },
     }
-    
     try:
-        producer = get_kafka_producer()
-        producer.send("system.alerts", event)
+        producer = _get_alert_producer()
+        producer.send(os.getenv("SYSTEM_ALERTS_TOPIC", "system.alerts"), event)
         producer.flush()
-    except Exception as e:
-        print("Failed to publish alert:resolved", e)
-        
+    except Exception as exc:
+        print(f"Failed to publish alert:resolved: {exc}")
     return {"status": "success", "event": "alert:resolved", "data": event["data"]}
 

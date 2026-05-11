@@ -10,11 +10,18 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       INFLUXDB_URL: http://influxdb:8086
+      KAFKA_BROKER: kafka:9092
+      TELEMETRY_TOPIC: telemetry.live
+      ANALYTICS_PREDICTIONS_TOPIC: analytics.predictions
+      SYSTEM_ALERTS_TOPIC: system.alerts
+      DIAGNOSTICS_TOPIC: system.diagnostics
       APP_ENV: staging
     depends_on:
       postgres:
         condition: service_healthy
       influxdb:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:

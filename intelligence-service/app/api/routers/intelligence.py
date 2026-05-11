@@ -364,6 +364,9 @@ def list_zone_predictions(
             ],
         }
 
+    return {"status": "success", "count": len(alerts), "data": alerts}
+
+
         results.append(item)
 
     if severity:

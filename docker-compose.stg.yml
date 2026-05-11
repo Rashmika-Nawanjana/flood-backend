@@ -145,10 +145,7 @@ services:
       - sensor-service
       - intelligence-service
       - zone-service
-    env_file:
-      - .env.stg
     environment:
-      KONG_ROLE: data_plane
       KONG_DATABASE: "off"
       KONG_VITALS: "off"
       KONG_KONNECT_MODE: "on"
@@ -167,14 +164,13 @@ services:
       KONG_ADMIN_LISTEN: 0.0.0.0:8001
       KONG_PROXY_LISTEN: 0.0.0.0:80
       KONG_STATUS_LISTEN: 0.0.0.0:8100
-      KONG_NODE_NAME: ${KONNECT_NODE_NAME:-flood-stg-node}
       KONG_LOG_LEVEL: notice
     ports:
       - "80:80"
       - "127.0.0.1:8001:8001"
       - "127.0.0.1:8100:8100"
     volumes:
-      - ./certs:/etc/kong/certs:ro
+      - ./kong.yml:/usr/local/kong/declarative/kong.yml:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "kong", "health"]

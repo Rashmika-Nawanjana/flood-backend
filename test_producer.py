@@ -1,26 +1,26 @@
-#!/usr/bin/env python3
 from kafka import KafkaProducer
 import json
 import time
 
-print("Connecting to Kafka...")
 producer = KafkaProducer(
-    bootstrap_servers='localhost:9093',
-    value_serializer=lambda v: json.dumps(v).encode('utf-8'),
-    acks='all',
+    bootstrap_servers='localhost:9092',
+    value_serializer=lambda v: json.dumps(v).encode('utf-8')
 )
-print("✓ Producer created")
 
-print("Sending test message...")
-future = producer.send('flood-sensor-data', {'test': 'message', 'timestamp': str(time.time())})
-print("✓ Message sent, waiting for callback...")
-try:
-    record_metadata = future.get(timeout=10)
-    print(f"✓ Confirmed at: {record_metadata.topic}[{record_metadata.partition}] @ offset {record_metadata.offset}")
-except Exception as e:
-    print(f"✗ Error: {e}")
+event = {
+    "event": "zone:risk:update",
+    "timestamp": "2026-05-07T12:00:00Z",
+    "data": {
+        "zone_id": "ZONE-K1",
+        "zone_name": "Getambe Basin",
+        "previous_level": "WARNING",
+        "current_level": "HIGH",
+        "risk_score": 85.0,
+        "color_code": "#FF0000"
+    }
+}
 
+print("Sending message to analytics.predictions...")
+producer.send('analytics.predictions', event)
 producer.flush()
-print("✓ Flushed")
-producer.close()
-print("✓ Closed")
+print("Sent successfully.")

@@ -164,8 +164,11 @@ services:
       KONG_PROXY_LISTEN: 0.0.0.0:80
       KONG_STATUS_LISTEN: 0.0.0.0:8100
       KONG_LOG_LEVEL: notice
+    # Kong only exposed inside the docker network — Caddy terminates TLS on :443
+    # and reverse-proxies here. Admin/status ports remain localhost-only.
+    expose:
+      - "80"
     ports:
-      - "80:80"
       - "127.0.0.1:8001:8001"
       - "127.0.0.1:8100:8100"
     volumes:
@@ -357,10 +360,37 @@ services:
           cpus: "0.25"
           memory: 256M
 
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: flood-caddy-stg
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      # Default sslip.io subdomain — DNS auto-resolves to the droplet IP, so
+      # Let's Encrypt's HTTP-01 challenge works without manual DNS setup.
+      # Override via .env.stg if a real domain becomes available later.
+      PUBLIC_HOSTNAME: ${PUBLIC_HOSTNAME:-flood-stg.157-245-102-69.sslip.io}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data_stg:/data
+      - caddy_config_stg:/config
+    depends_on:
+      - kong
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+
 volumes:
   pg_data_stg:
   influx_data_stg:
   pgadmin_data_stg:
+  caddy_data_stg:
+  caddy_config_stg:
 
 networks:
   default:

@@ -28,7 +28,7 @@ def get_sensor_trend(device_id: str, influx_client) -> str:
         flux = f"""
         from(bucket: "{INFLUXDB_BUCKET}")
           |> range(start: -1h)
-          |> filter(fn: (r) => r._measurement == "flood_measurements" and r.device_id == "{device_id}" and r._field == "water_level_cm")
+          |> filter(fn: (r) => r._measurement == "sensor_readings" and r.sensor_id == "{device_id}" and r._field == "water_level_m")
           |> sort(columns: ["_time"], desc: true)
           |> limit(n: 2)
         """
@@ -51,7 +51,7 @@ def get_sensor_trend(device_id: str, influx_client) -> str:
         latest = float(latest_value)
         previous = float(previous_value)
         
-        threshold = 1.0  # threshold of 1cm to consider as change
+        threshold = 0.01  # threshold of 1cm (0.01m) to consider as change
         difference = latest - previous
         
         if difference > threshold:
@@ -122,18 +122,24 @@ def process_message(data, write_api, detector, alert_producer, influx_client):
             return False  # Do NOT write anomalous data to InfluxDB
 
         # Data is clean - write to InfluxDB
-        point = Point("flood_measurements") \
-            .tag("device_id", device_id) \
-            .field("water_level_cm", water_level) \
-            .field("temperature", float(data['temperature'])) \
-            .field("pressure", float(data['pressure'])) \
-            .field("rainfall_intensity_mmh", float(data['rainfall_intensity_mmh'])) \
-            .field("flow_velocity_ms", float(data['flow_velocity_ms'])) \
-            .field("battery_voltage", float(device_status['battery_voltage'])) \
+        # sensor_readings: queried by sensor-service for live/history readings
+        reading_point = Point("sensor_readings") \
+            .tag("sensor_id", device_id) \
+            .field("water_level_m", round(water_level / 100.0, 4)) \
+            .field("temperature_c", float(data['temperature'])) \
+            .field("air_pressure_hpa", float(data['pressure'])) \
+            .field("rainfall_mm_per_hr", float(data['rainfall_intensity_mmh'])) \
+            .field("flow_velocity_mps", float(data['flow_velocity_ms'])) \
+            .time(timestamp)
+
+        # sensor_status: queried by sensor-service for battery/signal health
+        status_point = Point("sensor_status") \
+            .tag("sensor_id", device_id) \
+            .field("battery_percent", float(device_status['battery_voltage'])) \
             .field("signal_strength_dbm", float(device_status['signal_strength_dbm'])) \
             .time(timestamp)
 
-        write_api.write(bucket=get_bucket(), record=point)
+        write_api.write(bucket=get_bucket(), record=[reading_point, status_point])
         logger.info(
             f"[Kafka→InfluxDB] ✅ {device_id} | Water: {water_level}cm | Temp: {data['temperature']}°C | "
             f"Rain: {data['rainfall_intensity_mmh']}mm/h | Flow: {data['flow_velocity_ms']}m/s"

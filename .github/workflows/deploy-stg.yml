@@ -4,11 +4,6 @@ on:
   push:
     branches:
       - stg
-  pull_request:
-    branches:
-      - stg
-    types:
-      - closed
   workflow_dispatch:
     inputs:
       environment:

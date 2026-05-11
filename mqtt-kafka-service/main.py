@@ -2,6 +2,7 @@ import os
 import json
 import threading
 import time
+import uuid
 import logging
 from kafka import KafkaProducer
 from kafka.errors import NoBrokersAvailable
@@ -61,30 +62,55 @@ def create_producer():
 producer = None
 
 
-def validate_payload(payload: dict) -> bool:
-    """Validate the new MQTT telemetry payload shape."""
-    required_fields = [
-        "device_id",
-        "timestamp",
-        "temperature",
-        "pressure",
-        "water_level_cm",
-        "rainfall_intensity_mmh",
-        "flow_velocity_ms",
-        "device_status",
-    ]
-    if not all(field in payload for field in required_fields):
-        return False
+def normalize_payload(raw: dict) -> dict | None:
+    """Map a raw sensor payload to the canonical schema downstream services expect.
 
-    device_status = payload.get("device_status")
-    if not isinstance(device_status, dict):
-        return False
+    Accepts canonical fields, ESP32 legacy (temp_c/pressure_hpa/distance_cm/rssi_dbm/timestamp_ms),
+    or any mix. Always rebuilds the payload so nested device_status keys (battery_charge vs
+    battery_voltage, rssi_dbm vs signal_strength_dbm) are remapped consistently.
+    Returns None if device_id is missing.
+    """
+    if "device_id" not in raw:
+        return None
 
-    return all(key in device_status for key in ["battery_voltage", "signal_strength_dbm"])
+    ts = raw.get("timestamp")
+    # Sensor uptime (timestamp_ms < 10^12) is not wall-clock — fall back to server time.
+    if ts is None or (isinstance(ts, (int, float)) and ts < 10**12):
+        ts_ms = raw.get("timestamp_ms")
+        if ts_ms is not None and ts_ms >= 10**12:
+            ts = ts_ms
+        else:
+            ts = int(time.time() * 1000)
+
+    nested_status = raw.get("device_status") if isinstance(raw.get("device_status"), dict) else {}
+
+    return {
+        "device_id": raw["device_id"],
+        "timestamp": ts,
+        "temperature": float(raw.get("temperature", raw.get("temp_c", 0.0))),
+        "pressure": float(raw.get("pressure", raw.get("pressure_hpa", 0.0))),
+        "water_level_cm": float(raw.get("water_level_cm", raw.get("distance_cm", 0.0))),
+        "rainfall_intensity_mmh": float(raw.get("rainfall_intensity_mmh", 0.0)),
+        "flow_velocity_ms": float(raw.get("flow_velocity_ms", 0.0)),
+        "device_status": {
+            "battery_voltage": float(
+                nested_status.get("battery_voltage",
+                    nested_status.get("battery_charge",
+                        raw.get("battery_voltage", raw.get("battery_charge", 0.0))))
+            ),
+            "signal_strength_dbm": float(
+                nested_status.get("signal_strength_dbm",
+                    nested_status.get("rssi_dbm",
+                        raw.get("signal_strength_dbm", raw.get("rssi_dbm", 0.0))))
+            ),
+        },
+    }
 
 class MQTTClientManager:
     def __init__(self):
-        self.client = mqtt.Client(client_id="mqtt_kafka_bridge")
+        # Unique client_id prevents disconnect loops on shared public brokers (e.g. HiveMQ)
+        # where another client with the same id would forcibly take over the session.
+        self.client = mqtt.Client(client_id=f"mqtt_kafka_bridge_{uuid.uuid4().hex[:8]}")
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
         self.client.on_disconnect = self.on_disconnect
@@ -107,19 +133,17 @@ class MQTTClientManager:
     def on_message(self, client, userdata, msg):
         global producer
         try:
-            payload = json.loads(msg.payload.decode())
-            
-            # Validate required fields
-            if not validate_payload(payload):
-                logger.warning(f"Skipped invalid message - missing fields: {payload}")
+            raw = json.loads(msg.payload.decode())
+            payload = normalize_payload(raw)
+            if payload is None:
+                logger.warning(f"Skipped message - no device_id: {raw}")
                 return
-            
+
             with self.lock:
                 if producer is None:
                     logger.error("Producer not ready, dropping message")
                     return
-                future = producer.send(KAFKA_TOPIC, value=payload)
-                # Non-blocking: don't wait for send confirmation
+                producer.send(KAFKA_TOPIC, value=payload)
                 logger.info(
                     f"[MQTT→Kafka] {payload['device_id']} | Water: {payload['water_level_cm']}cm | "
                     f"Temp: {payload['temperature']}°C | Rain: {payload['rainfall_intensity_mmh']}mm/h"

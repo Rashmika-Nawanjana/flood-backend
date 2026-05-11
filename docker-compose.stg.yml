@@ -10,11 +10,18 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       INFLUXDB_URL: http://influxdb:8086
+      KAFKA_BROKER: kafka:9092
+      TELEMETRY_TOPIC: telemetry.live
+      ANALYTICS_PREDICTIONS_TOPIC: analytics.predictions
+      SYSTEM_ALERTS_TOPIC: system.alerts
+      DIAGNOSTICS_TOPIC: system.diagnostics
       APP_ENV: staging
     depends_on:
       postgres:
         condition: service_healthy
       influxdb:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -162,15 +169,14 @@ services:
       KONG_ADMIN_ACCESS_LOG: /dev/stdout
       KONG_ADMIN_ERROR_LOG: /dev/stderr
       KONG_ADMIN_LISTEN: 0.0.0.0:8001
-      KONG_PROXY_LISTEN: 0.0.0.0:80
-      KONG_STATUS_LISTEN: 0.0.0.0:8100
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
       KONG_LOG_LEVEL: notice
+    expose:
+      - "8000"
     ports:
-      - "80:80"
       - "127.0.0.1:8001:8001"
-      - "127.0.0.1:8100:8100"
     volumes:
-      - ./kong.yml:/usr/local/kong/declarative/kong.yml:ro
+      - ./api-gateway-spec.yaml:/usr/local/kong/declarative/api-gateway-spec.yaml:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "kong", "health"]
@@ -223,7 +229,7 @@ services:
       DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_BUCKET}
       DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_TOKEN}
     ports:
-      - "8086:8086"
+      - "127.0.0.1:8086:8086"
     volumes:
       - influx_data_stg:/var/lib/influxdb2
     restart: unless-stopped
@@ -247,7 +253,7 @@ services:
       PGADMIN_CONFIG_SERVER_MODE: "True"
       PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
     ports:
-      - "5050:80"
+      - "127.0.0.1:5050:80"
     volumes:
       - pgadmin_data_stg:/var/lib/pgadmin
     depends_on:
@@ -358,10 +364,37 @@ services:
           cpus: "0.25"
           memory: 256M
 
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: flood-caddy-stg
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      # Default sslip.io subdomain — DNS auto-resolves to the droplet IP, so
+      # Let's Encrypt's HTTP-01 challenge works without manual DNS setup.
+      # Override via .env.stg if a real domain becomes available later.
+      PUBLIC_HOSTNAME: ${PUBLIC_HOSTNAME:-flood-stg.157-245-102-69.sslip.io}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data_stg:/data
+      - caddy_config_stg:/config
+    depends_on:
+      - kong
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+
 volumes:
   pg_data_stg:
   influx_data_stg:
   pgadmin_data_stg:
+  caddy_data_stg:
+  caddy_config_stg:
 
 networks:
   default:

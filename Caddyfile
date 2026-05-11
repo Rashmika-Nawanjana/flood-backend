@@ -1,0 +1,20 @@
+{
+	email admin@floodsense.lk
+}
+
+{$PUBLIC_HOSTNAME} {
+	encode gzip
+
+	# Socket.IO — long timeouts to keep idle sessions alive between sensor bursts.
+	# Routed directly to the API service; Kong does not handle WebSocket upgrades.
+	@websockets path /ws/*
+	reverse_proxy @websockets api:8000 {
+		transport http {
+			read_timeout 1h
+			write_timeout 1h
+		}
+	}
+
+	# All other traffic routes through Kong (REST API, auth, rate limiting)
+	reverse_proxy kong:8000
+}

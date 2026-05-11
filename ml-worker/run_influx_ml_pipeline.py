@@ -36,6 +36,7 @@ from pipeline.predictions import (
     severity_from_peak,
     summarize_zone_prediction,
     write_predictions_to_db,
+    write_prediction_return_id,
 )
 
 
@@ -240,6 +241,10 @@ def main() -> int:
 
         all_predictions = []
         db_payloads = []
+
+        model_id = None
+        if not args.skip_db:
+            model_id = resolve_model_id(args.database_url, args.model_id)
         zones_dir = work_dir / "zones"
         zones_dir.mkdir(parents=True, exist_ok=True)
 
@@ -300,17 +305,27 @@ def main() -> int:
                     warning_m=args.risk_warning_m,
                     critical_m=args.risk_critical_m,
                 )
+                # persist prediction per-zone if DB enabled so alerts can reference it
+                prediction_db_id = None
+                if not args.skip_db and model_id is not None:
+                    prediction_db_id = write_prediction_return_id(
+                        args.database_url, model_id, zone_id, build_water_level_payload(df_pred)
+                    )
+                    summary["prediction_db_id"] = prediction_db_id
+
                 publish_zone_events(
                     producer=kafka_producer,
                     analytics_topic=args.analytics_topic,
                     alerts_topic=args.alerts_topic,
                     summary=summary,
+                    database_url=(args.database_url if not args.skip_db else None),
                 )
             df_pred.insert(0, "zone_id", zone_id)
             df_pred.insert(1, "zone_name", zone_name)
             df_pred.insert(0, "river_id", info.get("river_id"))
             all_predictions.append(df_pred)
             if not args.skip_db:
+                # keep a copy for combined CSV output if needed
                 db_payloads.append(
                     {
                         "zone_id": zone_id,
@@ -325,10 +340,7 @@ def main() -> int:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         combined.to_csv(output_path, index=False)
 
-        if not args.skip_db:
-            model_id = resolve_model_id(args.database_url, args.model_id)
-            write_predictions_to_db(args.database_url, model_id, db_payloads)
-            print("Stored predictions in flood_predictions table")
+        # predictions were stored per-zone earlier when DB enabled
 
         if kafka_producer is not None:
             kafka_producer.flush()

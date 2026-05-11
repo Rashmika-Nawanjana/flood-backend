@@ -10,6 +10,8 @@ from app.services.sensor_data import (
     fetch_sensor,
     fetch_sensors,
     fetch_zone,
+    fetch_anomalies,
+    fetch_zone_anomalies,
     get_history,
     get_latest_reading,
     get_latest_status,
@@ -322,24 +324,41 @@ def list_anomalies(
     sensor_id: str | None = Query(default=None),
     severity: str | None = Query(default=None),
 ) -> dict:
-    anomalies = list(_ANOMALIES_SAMPLE)
+    rows = fetch_anomalies(limit=200)
+
+    items = []
+    for r in rows:
+        reading = r.get("reading") or {}
+        items.append(
+            {
+                "anomaly_id": r.get("anomaly_id"),
+                "sensor_id": r.get("sensor_id"),
+                "zone_id": r.get("zone_id"),
+                "detected_at": _to_iso(r.get("detected_at")),
+                "type": r.get("type") or reading.get("type") or "ANOMALY",
+                "description": reading.get("description") or "",
+                "severity": r.get("severity"),
+                "anomaly_score": r.get("anomaly_score") or reading.get("score"),
+                "reading_at_detection": reading,
+                "expected_range": reading.get("expected_range"),
+                "status": r.get("status") or "UNRESOLVED",
+                "auto_alert_triggered": reading.get("alert_id") is not None,
+                "alert_id": reading.get("alert_id"),
+            }
+        )
+
+    if sensor_id is not None:
+        items = [it for it in items if it.get("sensor_id") == sensor_id]
 
     status_filter = _parse_filter(status)
     if status_filter:
-        anomalies = [
-            item for item in anomalies if str(item.get("status", "")).upper() in status_filter
-        ]
-    if sensor_id is not None:
-        anomalies = [item for item in anomalies if item.get("sensor_id") == sensor_id]
+        items = [it for it in items if str(it.get("status", "")).upper() in status_filter]
+
     severity_filter = _parse_filter(severity)
     if severity_filter:
-        anomalies = [
-            item
-            for item in anomalies
-            if str(item.get("severity", "")).upper() in severity_filter
-        ]
+        items = [it for it in items if str(it.get("severity", "")).upper() in severity_filter]
 
-    return {"status": "success", "count": len(anomalies), "data": anomalies}
+    return {"status": "success", "count": len(items), "data": items}
 
 
 @router.get("/anomalies/{zone_id}")
@@ -351,27 +370,40 @@ def list_zone_anomalies(
     zone = fetch_zone(zone_id)
     if zone is None:
         raise HTTPException(status_code=404, detail="Zone not found")
-
-    anomalies = [item for item in _ANOMALIES_SAMPLE if item.get("zone_id") == zone_id]
+    rows = fetch_zone_anomalies(zone_id, limit=200)
+    items = []
+    for r in rows:
+        reading = r.get("reading") or {}
+        items.append(
+            {
+                "anomaly_id": r.get("anomaly_id"),
+                "sensor_id": r.get("sensor_id"),
+                "zone_id": r.get("zone_id"),
+                "detected_at": _to_iso(r.get("detected_at")),
+                "type": r.get("type") or reading.get("type") or "ANOMALY",
+                "description": reading.get("description") or "",
+                "severity": r.get("severity"),
+                "anomaly_score": r.get("anomaly_score") or reading.get("score"),
+                "reading_at_detection": reading,
+                "expected_range": reading.get("expected_range"),
+                "status": r.get("status") or "UNRESOLVED",
+                "auto_alert_triggered": reading.get("alert_id") is not None,
+                "alert_id": reading.get("alert_id"),
+            }
+        )
 
     status_filter = _parse_filter(status)
     if status_filter:
-        anomalies = [
-            item for item in anomalies if str(item.get("status", "")).upper() in status_filter
-        ]
+        items = [it for it in items if str(it.get("status", "")).upper() in status_filter]
 
     severity_filter = _parse_filter(severity)
     if severity_filter:
-        anomalies = [
-            item
-            for item in anomalies
-            if str(item.get("severity", "")).upper() in severity_filter
-        ]
+        items = [it for it in items if str(it.get("severity", "")).upper() in severity_filter]
 
     return {
         "status": "success",
         "zone_id": zone.get("zone_id"),
         "zone_name": zone.get("zone_name"),
-        "count": len(anomalies),
-        "data": anomalies,
+        "count": len(items),
+        "data": items,
     }

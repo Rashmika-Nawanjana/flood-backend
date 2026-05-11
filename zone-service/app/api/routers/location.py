@@ -6,7 +6,11 @@ from typing import Any
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from app.services.zone_data import fetch_zones, normalize_zone_row
+import psycopg
+from psycopg.rows import dict_row
+
+from app.services.zone_data import fetch_zones, normalize_zone_row, fetch_zone
+from app.core.config import settings
 
 router = APIRouter(prefix="/v1", tags=["zones"])
 
@@ -59,6 +63,7 @@ def _geometry_contains(geometry: dict[str, Any], lng: float, lat: float) -> bool
 
 class LocationResolvePayload(BaseModel):
     lat: float = Field(ge=-90, le=90)
+    clerk_id: str | None = None
     lng: float = Field(ge=-180, le=180)
 
 
@@ -71,6 +76,29 @@ def resolve_location(payload: LocationResolvePayload) -> dict:
         zone = normalize_zone_row(row)
         geometry = zone.get("geometry") or {}
         if _geometry_contains(geometry, payload.lng, payload.lat):
+            user_zone_updated = False
+            if payload.clerk_id:
+                try:
+                    dsn = settings.database_url
+                    if dsn.startswith("postgresql+psycopg://"):
+                        dsn = dsn.replace("postgresql+psycopg://", "postgresql://", 1)
+                    with psycopg.connect(dsn, row_factory=dict_row) as conn:
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                """
+                                UPDATE users
+                                SET zone_id = %s, updated_at = NOW()
+                                WHERE clerk_id = %s
+                                RETURNING clerk_id
+                                """,
+                                (zone.get("zone_id"), payload.clerk_id),
+                            )
+                            row = cur.fetchone()
+                            if row:
+                                user_zone_updated = True
+                except Exception:
+                    user_zone_updated = False
+
             return {
                 "status": "success",
                 "timestamp": _to_iso(now),
@@ -83,6 +111,7 @@ def resolve_location(payload: LocationResolvePayload) -> dict:
                     "color_code": zone.get("color_code"),
                     "active_alerts": zone.get("active_alerts"),
                 },
+                "user_zone_updated": user_zone_updated,
             }
 
     return {
@@ -92,3 +121,32 @@ def resolve_location(payload: LocationResolvePayload) -> dict:
         "zone": None,
         "message": "Coordinates do not fall within any monitored flood zone.",
     }
+
+
+
+@router.get("/users/{clerk_id}/zone")
+def get_user_zone(clerk_id: str) -> dict:
+    """Return the zone information for the user if assigned."""
+    # Fetch user's zone_id from database
+    dsn = settings.database_url
+    if dsn.startswith("postgresql+psycopg://"):
+        dsn = dsn.replace("postgresql+psycopg://", "postgresql://", 1)
+
+    try:
+        with psycopg.connect(dsn, row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT zone_id FROM users WHERE clerk_id = %s LIMIT 1", (clerk_id,))
+                row = cur.fetchone()
+    except Exception:
+        row = None
+
+    if not row or not row.get("zone_id"):
+        return {"status": "success", "zone": None}
+
+    zone_id = row.get("zone_id")
+    zone_row = fetch_zone(zone_id)
+    if not zone_row:
+        return {"status": "success", "zone": None}
+
+    zone = normalize_zone_row(zone_row)
+    return {"status": "success", "zone": zone}

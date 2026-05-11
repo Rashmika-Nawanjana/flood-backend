@@ -1,0 +1,152 @@
+name: Manual Deploy to Staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Deployment action'
+        required: true
+        default: 'deploy'
+        type: choice
+        options:
+          - deploy
+          - rollback
+          - restart
+          - healthcheck
+
+jobs:
+  manual-deploy:
+    name: Manual Deployment Action
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: stg
+
+      - name: Execute Deployment Action
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: ${{ secrets.DO_USER }}
+          key: ${{ secrets.DO_SSH_KEY }}
+          script: |
+            cd /opt/flood-backend
+
+            cat > .env.stg << 'ENVEOF'
+            ${{ secrets.STG_ENV_VARS }}
+            ENVEOF
+
+            ENV_SIZE=$(wc -c < .env.stg)
+            if [ "$ENV_SIZE" -lt 5 ]; then
+              echo "⚠ STG_ENV_VARS secret is empty. Creating default staging env..."
+              echo "APP_NAME=Flood Backend - Staging" > .env.stg
+              echo "APP_ENV=staging" >> .env.stg
+              echo "APP_HOST=0.0.0.0" >> .env.stg
+              echo "APP_PORT=8000" >> .env.stg
+              echo "APP_DEBUG=false" >> .env.stg
+              echo "LOG_LEVEL=info" >> .env.stg
+              echo "" >> .env.stg
+              echo "STAGING_DOMAIN=stg.floodsense.lk" >> .env.stg
+              echo "STAGING_URL=https://stg.floodsense.lk" >> .env.stg
+              echo "FRONTEND_URL=https://stg-flood-management.vercel.app" >> .env.stg
+              echo "ALLOWED_ORIGINS=https://stg-flood-management.vercel.app,https://stg-web.floodsense.lk,https://stg.floodsense.lk" >> .env.stg
+              echo "" >> .env.stg
+              echo "POSTGRES_USER=flood_stg_user" >> .env.stg
+              echo "POSTGRES_PASSWORD=flood_stg_pass_2026" >> .env.stg
+              echo "POSTGRES_DB=flooddb_stg" >> .env.stg
+              echo "DATABASE_URL=postgresql+psycopg://flood_stg_user:flood_stg_pass_2026@postgres:5432/flooddb_stg" >> .env.stg
+              echo "" >> .env.stg
+              echo "INFLUXDB_URL=http://influxdb:8086" >> .env.stg
+              echo "INFLUXDB_USERNAME=admin" >> .env.stg
+              echo "INFLUXDB_PASSWORD=influx_stg_pass_2026" >> .env.stg
+              echo "INFLUXDB_ORG=flood-staging" >> .env.stg
+              echo "INFLUXDB_BUCKET=telemetry-stg" >> .env.stg
+              echo "INFLUXDB_TOKEN=flood-stg-influx-token-2026" >> .env.stg
+              echo "INFLUXDB_PORT=8086" >> .env.stg
+              echo "INFLUXDB_HOST=influxdb" >> .env.stg
+              echo "" >> .env.stg
+              echo "CLERK_JWKS_URL=https://useful-hen-13.clerk.accounts.dev/.well-known/jwks.json" >> .env.stg
+              echo "CLERK_ISSUER=https://useful-hen-13.clerk.accounts.dev" >> .env.stg
+              echo "CLERK_WEBHOOK_SECRET=whsec_o5rQSebAXqdafDAWJuvayUyav1XaAAE7" >> .env.stg
+              echo "" >> .env.stg
+              echo "MQTT_BROKER=broker.hivemq.com" >> .env.stg
+              echo "MQTT_PORT=1883" >> .env.stg
+              echo "MQTT_TOPIC=flood/sensors/#" >> .env.stg
+              echo "MQTT_USERNAME=" >> .env.stg
+              echo "MQTT_PASSWORD=" >> .env.stg
+              echo "" >> .env.stg
+              echo "KAFKA_BROKER=kafka:9092" >> .env.stg
+              echo "KAFKA_TOPIC=flood-sensor-data" >> .env.stg
+              echo "KAFKA_SECURITY_PROTOCOL=PLAINTEXT" >> .env.stg
+              echo "" >> .env.stg
+              echo "SENSOR_OFFLINE_MINUTES=15" >> .env.stg
+              echo "LOG_FORMAT=json" >> .env.stg
+              echo "LOG_OUTPUT=stdout" >> .env.stg
+              echo "HEALTH_CHECK_INTERVAL=30" >> .env.stg
+              echo "HEALTH_CHECK_TIMEOUT=10" >> .env.stg
+              echo "" >> .env.stg
+              echo "PGADMIN_EMAIL=admin@floodsense.lk" >> .env.stg
+              echo "PGADMIN_PASSWORD=pgadmin_stg_2026" >> .env.stg
+            fi
+
+            ACTION="${{ github.event.inputs.action }}"
+            
+            echo "🔨 Executing action: $ACTION"
+            
+            case "$ACTION" in
+              deploy)
+                echo "🚀 Starting deployment..."
+                git fetch origin && git pull origin stg
+                docker compose --env-file .env.stg -f docker-compose.stg.yml up -d
+                sleep 30
+                echo "✅ Deployment completed"
+                ;;
+              
+              rollback)
+                echo "⏮️ Rolling back to previous version..."
+                git checkout HEAD~1
+                docker compose --env-file .env.stg -f docker-compose.stg.yml down
+                docker compose --env-file .env.stg -f docker-compose.stg.yml up -d
+                echo "✅ Rollback completed"
+                ;;
+              
+              restart)
+                echo "🔄 Restarting services..."
+                docker compose --env-file .env.stg -f docker-compose.stg.yml restart
+                sleep 10
+                echo "✅ Services restarted"
+                ;;
+              
+              healthcheck)
+                echo "🏥 Running health checks..."
+                echo ""
+                echo "Kong Status:"
+                curl -s http://localhost:8001/status | jq '.' || echo "Kong is not responding"
+                echo ""
+                echo "Service Status:"
+                docker compose --env-file .env.stg -f docker-compose.stg.yml ps
+                ;;
+            esac
+            
+            echo ""
+            echo "📊 Current deployment state:"
+            docker compose --env-file .env.stg -f docker-compose.stg.yml ps
+
+  notify:
+    name: Notify Action Result
+    runs-on: ubuntu-latest
+    needs: manual-deploy
+    if: always()
+    steps:
+      - name: Action Status
+        run: |
+          ACTION="${{ github.event.inputs.action }}"
+          if [ "${{ needs.manual-deploy.result }}" == "success" ]; then
+            echo "✅ Manual action '$ACTION' completed successfully!"
+          else
+            echo "❌ Manual action '$ACTION' failed!"
+            exit 1
+          fi

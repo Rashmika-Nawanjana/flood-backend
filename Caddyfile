@@ -1,0 +1,24 @@
+{
+	email admin@floodsense.lk
+}
+
+{$PUBLIC_HOSTNAME} {
+	encode gzip
+
+	# Socket.IO endpoint — Caddy preserves the WebSocket upgrade automatically.
+	# Long idle timeout so live sessions survive between sensor:update bursts.
+	@websockets {
+		path /ws/*
+		header Connection *Upgrade*
+		header Upgrade websocket
+	}
+	reverse_proxy @websockets kong:80 {
+		transport http {
+			read_timeout 1h
+			write_timeout 1h
+		}
+	}
+
+	# Everything else (REST via Kong)
+	reverse_proxy kong:80
+}

@@ -99,7 +99,7 @@ services:
           "CMD",
           "python",
           "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8005/health')",
         ]
       interval: 30s
       timeout: 10s
@@ -145,7 +145,7 @@ services:
           memory: 512M
 
   kong:
-    image: kong/kong-gateway:3.14
+    image: kong:3.4
     container_name: flood-kong-stg
     depends_on:
       - api
@@ -154,16 +154,7 @@ services:
       - zone-service
     environment:
       KONG_DATABASE: "off"
-      KONG_VITALS: "off"
-      KONG_KONNECT_MODE: "on"
-      KONG_CLUSTER_MTLS: pki
-      KONG_CLUSTER_CONTROL_PLANE: 392acc275c.us.cp.konghq.com:443
-      KONG_CLUSTER_SERVER_NAME: 392acc275c.us.cp.konghq.com
-      KONG_CLUSTER_TELEMETRY_ENDPOINT: 392acc275c.us.tp.konghq.com:443
-      KONG_CLUSTER_TELEMETRY_SERVER_NAME: 392acc275c.us.tp.konghq.com
-      KONG_CLUSTER_CERT: /etc/kong/certs/tls.crt
-      KONG_CLUSTER_CERT_KEY: /etc/kong/certs/tls.key
-      KONG_LUA_SSL_TRUSTED_CERTIFICATE: system
+      KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/api-gateway-spec.yaml
       KONG_PROXY_ACCESS_LOG: /dev/stdout
       KONG_PROXY_ERROR_LOG: /dev/stderr
       KONG_ADMIN_ACCESS_LOG: /dev/stdout
@@ -188,7 +179,6 @@ services:
         limits:
           cpus: "1"
           memory: 1G
-
   postgres:
     image: postgis/postgis:15-3.4
     container_name: flood-postgres-stg

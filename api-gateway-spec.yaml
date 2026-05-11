@@ -45,7 +45,7 @@ services:
         strip_path: false
 
   - name: intelligence-service
-    url: http://intelligence-service:8005
+    url: http://intelligence-service:8003
     routes:
       - name: intelligence-service-route
         paths:
@@ -90,4 +90,5 @@ services:
           - /health
         protocols:
           - http
+          - https
         strip_path: false

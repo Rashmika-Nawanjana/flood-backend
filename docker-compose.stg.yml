@@ -147,6 +147,7 @@ services:
       - zone-service
     environment:
       KONG_DATABASE: "off"
+      KONG_ROUTER_FLAVOR: expressions
       KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/kong.yml
       KONG_PROXY_ACCESS_LOG: /dev/stdout
       KONG_PROXY_ERROR_LOG: /dev/stderr

@@ -5,20 +5,18 @@
 {$PUBLIC_HOSTNAME} {
 	encode gzip
 
-	# Socket.IO endpoint — Caddy preserves the WebSocket upgrade automatically.
-	# Long idle timeout so live sessions survive between sensor:update bursts.
-	@websockets {
-		path /ws/*
-		header Connection *Upgrade*
-		header Upgrade websocket
-	}
-	reverse_proxy @websockets kong:80 {
+	# Socket.IO at /ws/live — routed directly to the API service, bypassing Kong.
+	# Kong runs as a Konnect data plane (cloud-managed routes) and does not have
+	# a local /ws route configured. Caddy handles the WebSocket upgrade natively;
+	# the long timeout keeps idle Socket.IO sessions alive between sensor bursts.
+	@websockets path /ws/*
+	reverse_proxy @websockets api:8000 {
 		transport http {
 			read_timeout 1h
 			write_timeout 1h
 		}
 	}
 
-	# Everything else (REST via Kong)
+	# All other traffic routes through Kong (REST API, auth, rate limiting)
 	reverse_proxy kong:80
 }

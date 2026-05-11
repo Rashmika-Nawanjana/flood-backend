@@ -47,6 +47,20 @@ services:
           - DELETE
           - OPTIONS
         strip_path: false
+      - name: sensor-zone-anomalies-route
+        paths:
+          - ~/v1/zones/[^/]+/anomalies
+        protocols:
+          - http
+          - https
+        methods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+        strip_path: false
 
   - name: intelligence-service
     url: http://intelligence-service:8003
@@ -64,6 +78,17 @@ services:
           - PUT
           - PATCH
           - DELETE
+          - OPTIONS
+        strip_path: false
+      - name: intelligence-zone-subroutes
+        paths:
+          - ~/v1/zones/[^/]+/alerts
+          - ~/v1/zones/[^/]+/predictions
+        protocols:
+          - http
+          - https
+        methods:
+          - GET
           - OPTIONS
         strip_path: false
 

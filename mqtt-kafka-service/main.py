@@ -80,7 +80,7 @@ def normalize_payload(raw: dict) -> dict | None:
         if ts_ms is not None and ts_ms >= 10**12:
             ts = ts_ms
         else:
-            ts = int(time.time() * 1000)
+            ts = int(time.time() * 1_000_000_000)  # nanoseconds
 
     nested_status = raw.get("device_status") if isinstance(raw.get("device_status"), dict) else {}
 

@@ -54,81 +54,21 @@ async def _kafka_alerts_consumer_loop() -> None:
         print("Kafka alerts consumer Error: ", e)
 
 
-_sensor_last_seen = {}
-
-async def _sensor_watchdog_loop() -> None:
-    try:
-        from kafka import KafkaProducer
-        import json
-        
-        # Non async producer for the watchdog thread
-        def get_producer():
-            return KafkaProducer(
-                bootstrap_servers='localhost:9092',
-                value_serializer=lambda v: json.dumps(v).encode('utf-8')
-            )
-            
-        while True:
-            await asyncio.sleep(60) # check every minute
-            now = datetime.now(timezone.utc)
-            offline_sensors = []
-            
-            for sensor_id, last_seen_time in list(_sensor_last_seen.items()):
-                # If more than 5 minutes elapsed
-                if (now - last_seen_time).total_seconds() > 300:
-                    offline_sensors.append((sensor_id, last_seen_time))
-            
-            if offline_sensors:
-                producer = get_producer()
-                for sensor_id, last_seen_time in offline_sensors:
-                    event = {
-                        "event": "sensor:offline",
-                        "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                        "data": {
-                            "sensor_id": sensor_id,
-                            "zone_id": "ZONE-K1", # Mocked zone map
-                            "last_seen": last_seen_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                            "status": "OFFLINE"
-                        }
-                    }
-                    producer.send("system.alerts", event)
-                    # Stop tracking it so we don't spam offline events
-                    del _sensor_last_seen[sensor_id]
-                producer.flush()
-    except Exception as e:
-        print("Sensor watchdog error:", e)
-
-
 async def _kafka_sensor_consumer_loop() -> None:
     try:
         from aiokafka import AIOKafkaConsumer
+        import os
+        telemetry_topic = os.getenv("TELEMETRY_TOPIC", "telemetry.live")
         consumer = AIOKafkaConsumer(
-            'flood-sensor-data',
+            telemetry_topic,
             bootstrap_servers='localhost:9092',
             value_deserializer=lambda v: json.loads(v.decode('utf-8'))
         )
         await consumer.start()
         async for msg in consumer:
-            raw_data = msg.value
-            if "device_id" in raw_data:
-                _sensor_last_seen[raw_data["device_id"]] = datetime.now(timezone.utc)
-                # Transform raw telemetry to frontend format
-                payload = {
-                    "event": "sensor:update",
-                    "timestamp": raw_data.get("timestamp", datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")),
-                    "data": {
-                        "sensor_id": raw_data["device_id"],
-                        "zone_id": "ZONE-K1",  # Placeholder or map from device_id in real implementation
-                        "current_reading": {
-                            "water_level_m": float(raw_data.get("water_level_cm", 0)) / 100.0,
-                            "flow_velocity_mps": raw_data.get("flow_velocity_ms", 0.0),
-                            "rainfall_mm_per_hr": raw_data.get("rainfall_intensity_mmh", 0.0),
-                            "temperature_c": raw_data.get("temperature", 0.0),
-                            "air_pressure_hpa": raw_data.get("pressure", 0.0),
-                            "trend": "STABLE"  # Mocked, could be computed based on past readings
-                        }
-                    }
-                }
+            payload = msg.value
+            event_type = payload.get("event")
+            if event_type == "sensor:update":
                 await sio.emit("sensor:update", payload)
     except Exception as e:
         print("Kafka sensor telemetry consumer Error: ", e)
@@ -141,7 +81,6 @@ async def _ensure_background_task() -> None:
             sio.start_background_task(_kafka_consumer_loop)
             sio.start_background_task(_kafka_alerts_consumer_loop)
             sio.start_background_task(_kafka_sensor_consumer_loop)
-            sio.start_background_task(_sensor_watchdog_loop)
             _broadcast_task_started = True
 
 @sio.event

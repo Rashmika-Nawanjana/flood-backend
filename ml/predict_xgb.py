@@ -116,48 +116,45 @@ def resolve_horizons(model_dir, requested):
 
 
 
+def _severity_from_peak(peak_level_m: float, warning_m: float, critical_m: float) -> str:
+    if peak_level_m >= critical_m:
+        return "CRITICAL"
+    if peak_level_m >= warning_m:
+        return "HIGH"
+    if peak_level_m >= warning_m * 0.75:
+        return "MEDIUM"
+    return "LOW"
+
+
+def _color_for_severity(severity: str) -> str:
+    return {
+        "LOW": "#22C55E",
+        "MEDIUM": "#FACC15",
+        "HIGH": "#F97316",
+        "CRITICAL": "#EF4444",
+    }.get(severity, "#9CA3AF")
+
+
 def publish_prediction_events(predictions_df, args):
-    """
-    Publish summarized prediction events to Kafka using real prediction values.
-
-    - Determines `zone_id` and `zone_name` from DataFrame if present.
-    - Summarizes the latest row across horizon columns to find predicted peak and horizon.
-    - Publishes `zone:risk:update` and `prediction:new` to `analytics.predictions`.
-    - Publishes `alert:new` to `system.alerts` when severity is HIGH/CRITICAL.
-
-    This replaces the previous mock publisher and uses values from `predictions_df`.
-    """
     try:
         from kafka import KafkaProducer
-        from datetime import datetime, timezone
+        from datetime import datetime, timezone, timedelta
         import json
         import os
 
-        kafka_broker = os.getenv("KAFKA_BROKER", "localhost:9092")
+        kafka_broker = args.kafka_broker or os.getenv("KAFKA_BROKER", "localhost:9092")
+        analytics_topic = args.analytics_topic or os.getenv("ANALYTICS_PREDICTIONS_TOPIC", "analytics.predictions")
+        alerts_topic = args.alerts_topic or os.getenv("ANOMALY_DETECTOR_OUTPUT_TOPIC", "system.alerts")
 
         producer = KafkaProducer(
             bootstrap_servers=kafka_broker,
-            value_serializer=lambda v: json.dumps(v).encode("utf-8"),
-            acks="all",
+            value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+            acks='all',
         )
 
-        # determine zone info if available
-        if "zone_id" in predictions_df.columns:
-            zone_id = str(predictions_df.iloc[-1].get("zone_id"))
-        else:
-            zone_id = os.getenv("ZONE_ID", "UNKNOWN")
-        if "zone_name" in predictions_df.columns:
-            zone_name = str(predictions_df.iloc[-1].get("zone_name"))
-        else:
-            zone_name = os.getenv("ZONE_NAME", "UNKNOWN")
-
-        # find horizon columns
-        horizon_cols = [c for c in predictions_df.columns if c.startswith("y_pred_t_plus_")]
-        if not horizon_cols:
-            print("No horizon prediction columns found; skipping publish.")
-            return
-
         latest = predictions_df.iloc[-1]
+        # find horizon columns and pick peak
+        horizon_cols = [col for col in predictions_df.columns if col.startswith("y_pred_t_plus_")]
         valid = []
         for col in horizon_cols:
             val = latest.get(col)
@@ -167,93 +164,73 @@ def publish_prediction_events(predictions_df, args):
             valid.append((minutes, float(val), col))
 
         if not valid:
-            print("No valid prediction values in latest row; skipping publish.")
+            print("No valid prediction values to publish")
             return
 
-        # peak horizon and value
-        peak_minutes, peak_level_m, peak_col = max(valid, key=lambda t: t[1])
+        peak_minutes, peak_level_m, _ = max(valid, key=lambda t: t[1])
+        severity = _severity_from_peak(peak_level_m, args.warning_m, args.critical_m)
+        risk_score = round(min(100.0, max(0.0, (peak_level_m / args.critical_m) * 100.0)), 1)
 
-        # severity thresholds (defaults; override with env vars)
-        warning_m = float(os.getenv("RISK_WARNING_M", "3.0"))
-        critical_m = float(os.getenv("RISK_CRITICAL_M", "5.0"))
-        def severity_from_peak(level):
-            if level >= critical_m:
-                return "CRITICAL"
-            if level >= warning_m:
-                return "HIGH"
-            if level >= warning_m * 0.75:
-                return "MEDIUM"
-            return "LOW"
-
-        severity = severity_from_peak(peak_level_m)
-
-        # compute estimated flood time from TimeStamp column if present
+        time_raw = str(latest["TimeStamp"])
         try:
-            ts_raw = latest.get("TimeStamp")
-            if isinstance(ts_raw, str):
-                base_ts = pd.to_datetime(ts_raw)
-            else:
-                base_ts = pd.to_datetime(ts_raw)
+            base_ts = pd.to_datetime(time_raw)
             if base_ts.tzinfo is None:
-                base_ts = base_ts.tz_localize("UTC")
-            estimated_flood_time = (base_ts + pd.Timedelta(minutes=peak_minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                base_ts = base_ts.tz_localize('UTC')
         except Exception:
-            estimated_flood_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            base_ts = datetime.now(timezone.utc)
 
-        prediction_id = f"PRED-{zone_id}-{int(datetime.now(timezone.utc).timestamp())}"
+        estimated_flood_time = (base_ts + timedelta(minutes=peak_minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        # publish zone:risk:update
-        risk_event = {
-            "event": "zone:risk:update",
-            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "data": {
-                "zone_id": zone_id,
-                "zone_name": zone_name,
-                "previous_level": "UNKNOWN",
-                "current_level": severity,
-                "risk_score": round(min(100.0, max(0.0, (peak_level_m / max(critical_m, 0.0001)) * 100.0)), 1),
-                "color_code": "#F97316" if severity in {"HIGH", "CRITICAL"} else "#22C55E",
-            },
-        }
-        producer.send(os.getenv("ANALYTICS_TOPIC", "analytics.predictions"), risk_event)
+        prediction_id = f"PRED-{args.zone_id or 'UNKNOWN'}-{int(datetime.now().timestamp())}"
 
-        # publish prediction:new
-        pred_event = {
+        prediction_event = {
             "event": "prediction:new",
             "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "data": {
                 "prediction_id": prediction_id,
-                "zone_id": zone_id,
-                "zone_name": zone_name,
-                "predicted_peak_level_m": round(float(peak_level_m), 4),
+                "zone_id": args.zone_id,
+                "zone_name": args.zone_name,
+                "predicted_peak_level_m": round(peak_level_m, 4),
                 "estimated_flood_time": estimated_flood_time,
                 "severity": severity,
-                "top_risk_factors": [
-                    {"factor": peak_col, "value": round(float(peak_level_m), 4), "impact": "High"}
-                ],
+                "top_risk_factors": [{"factor": "Predicted Peak Level", "value": f"{peak_level_m}m", "impact": "High"}],
             },
         }
-        producer.send(os.getenv("ANALYTICS_TOPIC", "analytics.predictions"), pred_event)
 
-        # if high severity, also publish alert
+        risk_event = {
+            "event": "zone:risk:update",
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "data": {
+                "zone_id": args.zone_id,
+                "zone_name": args.zone_name,
+                "previous_level": "UNKNOWN",
+                "current_level": severity,
+                "risk_score": risk_score,
+                "color_code": _color_for_severity(severity),
+            },
+        }
+
+        producer.send(analytics_topic, risk_event)
+        producer.send(analytics_topic, prediction_event)
+
         if severity in {"HIGH", "CRITICAL"}:
             alert_event = {
                 "event": "alert:new",
                 "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "data": {
-                    "alert_id": f"ALT-{zone_id}-{int(datetime.now(timezone.utc).timestamp())}",
-                    "zone_id": zone_id,
+                    "alert_id": f"ALT-{args.zone_id or 'ML'}-{int(datetime.now().timestamp())}",
+                    "zone_id": args.zone_id,
                     "severity": severity,
-                    "title": f"Automated ML alert: {severity} flood risk for {zone_name}",
-                    "message": "Model predicts elevated water levels. Follow local guidance.",
+                    "title": f"Flood risk {severity} in {args.zone_name}",
+                    "message": "Predicted water levels indicate elevated flood risk.",
                     "recommended_action": "EVACUATE" if severity == "CRITICAL" else "PREPARE",
                     "recommended_shelters": [],
                 },
             }
-            producer.send(os.getenv("ALERTS_TOPIC", "system.alerts"), alert_event)
+            producer.send(alerts_topic, alert_event)
 
         producer.flush()
-        print("Successfully published ML events to Kafka.")
+        print("Published ML events to Kafka.")
     except Exception as e:
         print(f"Failed to publish to Kafka: {e}")
 
@@ -289,12 +266,8 @@ def main():
     output_path.parent.mkdir(parents=True, exist_ok=True)
     predictions.to_csv(output_path, index=False)
 
-    # publish ML events derived from predictions (if invoked in standalone mode)
-    try:
-        publish_prediction_events(predictions, args)
-    except Exception:
-        # publishing is best-effort; avoid crashing the prediction run
-        pass
+    # publish events to Kafka (if configured)
+    publish_prediction_events(predictions, args)
 
     print(f"Predictions saved to: {output_path}")
 

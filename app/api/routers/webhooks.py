@@ -42,6 +42,37 @@ def _extract_user_fields(data: dict) -> dict:
 
     return {
         "clerk_id": data.get("id"),
+from fastapi import APIRouter, HTTPException, Request, status
+from svix import Webhook, WebhookVerificationError
+
+from app.core.config import settings
+from app.db.pg import get_connection
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/v1/webhooks", tags=["webhooks"])
+
+
+# ── Helpers ──────────────────────────────────────────────────────────
+
+
+def _extract_user_fields(data: dict) -> dict:
+    """Extract normalised user fields from a Clerk webhook event payload."""
+    email_addresses = data.get("email_addresses", [])
+    email = (
+        email_addresses[0].get("email_address", "") if email_addresses else ""
+    )
+
+    first_name = data.get("first_name") or ""
+    last_name = data.get("last_name") or ""
+    full_name = f"{first_name} {last_name}".strip() or None
+
+    public_metadata = data.get("public_metadata") or {}
+    role = public_metadata.get("role", "citizen")
+    zone_id = public_metadata.get("zone_id") or None
+
+    return {
+        "clerk_id": data.get("id"),
         "email": email,
         "full_name": full_name,
         "role": role,

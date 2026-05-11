@@ -3,6 +3,7 @@ import logging
 import time
 import threading
 from datetime import datetime, timezone
+import psycopg
 
 from kafka import KafkaProducer
 from kafka.errors import KafkaError, NoBrokersAvailable
@@ -63,6 +64,27 @@ def get_sensor_trend(device_id: str, influx_client) -> str:
     except Exception as e:
         logger.warning(f"Failed to calculate trend for {device_id}: {e}")
         return "UNKNOWN"
+
+
+def _get_zone_for_sensor(sensor_id: str) -> str | None:
+    """Query Postgres sensor_nodes for zone_id for the given sensor_id."""
+    try:
+        db_url = globals().get('_kif_state', {}).get('database_url') or globals().get('_kif_state', {}).get('db_url') or None
+        if not db_url:
+            # try environment
+            from config import DATABASE_URL
+            db_url = DATABASE_URL
+        if not db_url:
+            return None
+        with psycopg.connect(db_url) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT zone_id FROM sensor_nodes WHERE sensor_id = %s LIMIT 1", (sensor_id,))
+                row = cur.fetchone()
+                if row:
+                    return row[0]
+    except Exception:
+        return None
+    return None
 
 def process_message(data, write_api, detector, alert_producer, influx_client):
     """
@@ -221,6 +243,7 @@ def main():
             'telemetry_producer': telemetry_producer,
             'diagnostics_producer': diagnostics_producer,
             '_sensor_last_seen': {},
+            'database_url': DATABASE_URL,
         }
         logger.info("✅ Kafka producers (telemetry, diagnostics) initialized")
     except Exception as e:
@@ -237,6 +260,49 @@ def main():
     logger.info("✅ Pipeline started!")
     logger.info("   Kafka → [Anomaly Check] → InfluxDB bridge active...")
     logger.info("-" * 60)
+
+    # Start watchdog thread to publish sensor:offline events based on last-seen map
+    def _sensor_watchdog_loop():
+        logger.info("🔎 Sensor watchdog started")
+        while True:
+            try:
+                main_state = globals().get('_kif_state') or {}
+                last_seen = main_state.get('_sensor_last_seen', {})
+                diagnostics = main_state.get('diagnostics_producer')
+                now = datetime.now(timezone.utc)
+                to_remove = []
+                for sensor_id, seen_ts in list(last_seen.items()):
+                    try:
+                        if (now - seen_ts).total_seconds() > 300:
+                            zone_id = _get_zone_for_sensor(sensor_id) or None
+                            event = {
+                                "event": "sensor:offline",
+                                "timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                "data": {
+                                    "sensor_id": sensor_id,
+                                    "zone_id": zone_id,
+                                    "last_seen": seen_ts.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                    "status": "OFFLINE",
+                                },
+                            }
+                            if diagnostics:
+                                try:
+                                    diagnostics.send(DIAGNOSTICS_TOPIC, event)
+                                    diagnostics.flush()
+                                    logger.info(f"[Watchdog] Published sensor:offline for {sensor_id} to {DIAGNOSTICS_TOPIC}")
+                                except Exception as e:
+                                    logger.warning(f"Watchdog failed to publish offline event: {e}")
+                            to_remove.append(sensor_id)
+                    except Exception:
+                        continue
+                for sid in to_remove:
+                    last_seen.pop(sid, None)
+            except Exception as e:
+                logger.error(f"Watchdog loop error: {e}")
+            time.sleep(60)
+
+    watchdog = threading.Thread(target=_sensor_watchdog_loop, daemon=True)
+    watchdog.start()
 
     while True:
         try:

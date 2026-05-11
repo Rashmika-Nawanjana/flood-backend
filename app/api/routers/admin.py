@@ -361,10 +361,27 @@ def get_kafka_producer():
 
 @router.patch("/alerts/{alert_id}")
 def update_alert(alert_id: str, payload: AlertResolutionPayload) -> dict:
-    # Normally we'd update the DB here first:
-    # update = "UPDATE alerts SET status = 'RESOLVED', resolved_at = NOW(), resolution_note = %s WHERE alert_id = %s RETURNING *"
     from datetime import datetime, timezone
     
+    # Try looking up the zone_id from DB if possible, or fallback to unknown
+    zone_id = None
+    try:
+        from app.db.pg import get_connection
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT zone_id FROM anomalies WHERE anomaly_id = %s LIMIT 1", (alert_id,))
+                row = cur.fetchone()
+                if row:
+                    zone_id = row[0]
+                if not zone_id: # Also try resolving to sensor zone
+                    cur.execute("SELECT zone_id FROM sensor_nodes JOIN anomalies ON sensor_nodes.sensor_id = anomalies.sensor_id WHERE anomaly_id = %s LIMIT 1", (alert_id,))
+                    row = cur.fetchone()
+                    if row:
+                        zone_id = row[0]
+    except Exception as e:
+        import logging
+        logging.warning(f"Could not resolve zone_id for alert_id {alert_id}: {e}")
+
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     
     event = {
@@ -372,7 +389,7 @@ def update_alert(alert_id: str, payload: AlertResolutionPayload) -> dict:
         "timestamp": timestamp,
         "data": {
             "alert_id": alert_id,
-            "zone_id": "ZONE-K1", # In a real implementation this would come from the DB row
+            "zone_id": zone_id,
             "resolved_at": timestamp,
             "resolution_note": payload.resolution_note
         }
@@ -380,6 +397,7 @@ def update_alert(alert_id: str, payload: AlertResolutionPayload) -> dict:
     
     try:
         producer = get_kafka_producer()
+        # alerts go to system.alerts, or system.diagnostics optionally. (Default system.alerts per earlier decision)
         producer.send("system.alerts", event)
         producer.flush()
     except Exception as e:

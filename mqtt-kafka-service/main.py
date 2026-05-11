@@ -2,6 +2,7 @@ import os
 import json
 import threading
 import time
+import uuid
 import logging
 from kafka import KafkaProducer
 from kafka.errors import NoBrokersAvailable
@@ -84,7 +85,9 @@ def validate_payload(payload: dict) -> bool:
 
 class MQTTClientManager:
     def __init__(self):
-        self.client = mqtt.Client(client_id="mqtt_kafka_bridge")
+        # Unique client_id prevents disconnect loops on shared public brokers (e.g. HiveMQ)
+        # where another client with the same id would forcibly take over the session.
+        self.client = mqtt.Client(client_id=f"mqtt_kafka_bridge_{uuid.uuid4().hex[:8]}")
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
         self.client.on_disconnect = self.on_disconnect

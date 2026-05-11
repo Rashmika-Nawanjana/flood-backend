@@ -5,10 +5,8 @@
 {$PUBLIC_HOSTNAME} {
 	encode gzip
 
-	# Socket.IO at /ws/live — routed directly to the API service, bypassing Kong.
-	# Kong runs as a Konnect data plane (cloud-managed routes) and does not have
-	# a local /ws route configured. Caddy handles the WebSocket upgrade natively;
-	# the long timeout keeps idle Socket.IO sessions alive between sensor bursts.
+	# Socket.IO — long timeouts to keep idle sessions alive between sensor bursts.
+	# Routed directly to the API service; Kong does not handle WebSocket upgrades.
 	@websockets path /ws/*
 	reverse_proxy @websockets api:8000 {
 		transport http {

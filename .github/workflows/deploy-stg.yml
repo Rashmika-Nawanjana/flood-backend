@@ -330,10 +330,9 @@ jobs:
             echo "🛑 Stopping existing services..."
             docker compose --env-file .env.stg -f docker-compose.stg.yml down || true
             
-            # Prune unused images and volumes
-            echo "🧹 Cleaning up unused Docker resources..."
+            # Prune unused images only — never prune volumes (would wipe Postgres data)
+            echo "🧹 Cleaning up unused Docker images..."
             docker image prune -f --filter "until=72h"
-            docker volume prune -f
             
             # Start services
             echo "🐳 Starting Docker services..."

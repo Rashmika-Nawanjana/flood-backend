@@ -25,7 +25,19 @@ def validate_payload(data: dict) -> bool:
 
 def parse_timestamp(timestamp_value: Any) -> int:
     if isinstance(timestamp_value, (int, float)):
-        return int(timestamp_value)
+        v = int(timestamp_value)
+        # Detect unit by magnitude and normalise to nanoseconds:
+        #   < 1e10  → seconds       (Unix epoch seconds, e.g. 1_778_510_369)
+        #   < 1e13  → milliseconds  (normalize_payload fallback, e.g. 1_778_510_369_104)
+        #   < 1e16  → microseconds
+        #   >= 1e16 → nanoseconds   (already correct)
+        if v < 10_000_000_000:          # seconds
+            return v * 1_000_000_000
+        elif v < 10_000_000_000_000:    # milliseconds
+            return v * 1_000_000
+        elif v < 10_000_000_000_000_000:  # microseconds
+            return v * 1_000
+        return v                         # nanoseconds
 
     if isinstance(timestamp_value, str):
         try:

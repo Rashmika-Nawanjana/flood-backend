@@ -37,10 +37,10 @@ def create_consumer() -> KafkaConsumer:
         bootstrap_servers=KAFKA_BROKER,
         auto_offset_reset="earliest",
         value_deserializer=lambda v: json.loads(v.decode("utf-8")),
-        consumer_timeout_ms=1000,
         group_id="kafka-influx-consumer",
         session_timeout_ms=30000,
         heartbeat_interval_ms=10000,
+        max_poll_interval_ms=300000,
     )
 
 

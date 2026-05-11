@@ -65,24 +65,24 @@ producer = None
 def normalize_payload(raw: dict) -> dict | None:
     """Map a raw sensor payload to the canonical schema downstream services expect.
 
-    Supports two shapes:
-    - Canonical: already has temperature/pressure/water_level_cm/... → passed through.
-    - ESP32 legacy: temp_c/pressure_hpa/distance_cm/rssi_dbm/timestamp_ms (boot uptime)
-      → mapped to canonical fields; missing fields (rainfall, flow_velocity, battery) default to 0.
+    Accepts canonical fields, ESP32 legacy (temp_c/pressure_hpa/distance_cm/rssi_dbm/timestamp_ms),
+    or any mix. Always rebuilds the payload so nested device_status keys (battery_charge vs
+    battery_voltage, rssi_dbm vs signal_strength_dbm) are remapped consistently.
     Returns None if device_id is missing.
     """
     if "device_id" not in raw:
         return None
 
-    canonical_keys = {"temperature", "pressure", "water_level_cm"}
-    if canonical_keys.issubset(raw.keys()) and isinstance(raw.get("device_status"), dict):
-        return raw
-
     ts = raw.get("timestamp")
-    if ts is None:
+    # Sensor uptime (timestamp_ms < 10^12) is not wall-clock — fall back to server time.
+    if ts is None or (isinstance(ts, (int, float)) and ts < 10**12):
         ts_ms = raw.get("timestamp_ms")
-        # Sensor sends milliseconds-since-boot, not wall-clock. Use server time as ground truth.
-        ts = int(time.time() * 1000) if ts_ms is not None and ts_ms < 10**12 else (ts_ms or int(time.time() * 1000))
+        if ts_ms is not None and ts_ms >= 10**12:
+            ts = ts_ms
+        else:
+            ts = int(time.time() * 1000)
+
+    nested_status = raw.get("device_status") if isinstance(raw.get("device_status"), dict) else {}
 
     return {
         "device_id": raw["device_id"],
@@ -93,8 +93,16 @@ def normalize_payload(raw: dict) -> dict | None:
         "rainfall_intensity_mmh": float(raw.get("rainfall_intensity_mmh", 0.0)),
         "flow_velocity_ms": float(raw.get("flow_velocity_ms", 0.0)),
         "device_status": {
-            "battery_voltage": float(raw.get("battery_voltage", 0.0)),
-            "signal_strength_dbm": float(raw.get("signal_strength_dbm", raw.get("rssi_dbm", 0.0))),
+            "battery_voltage": float(
+                nested_status.get("battery_voltage",
+                    nested_status.get("battery_charge",
+                        raw.get("battery_voltage", raw.get("battery_charge", 0.0))))
+            ),
+            "signal_strength_dbm": float(
+                nested_status.get("signal_strength_dbm",
+                    nested_status.get("rssi_dbm",
+                        raw.get("signal_strength_dbm", raw.get("rssi_dbm", 0.0))))
+            ),
         },
     }
 

@@ -14,6 +14,17 @@ services:
         expression: 'http.path ^= "/health"'
         strip_path: false
 
+  - name: flood-ws
+    url: http://api:8000
+    # Socket.IO at /ws/live — Kong proxies the HTTP upgrade through to the API service.
+    # read_timeout/write_timeout extended so idle WS sessions aren't killed by Kong.
+    read_timeout: 3600000
+    write_timeout: 3600000
+    routes:
+      - name: flood-ws-route
+        expression: 'http.path ^= "/ws"'
+        strip_path: false
+
   - name: sensor-service
     url: http://sensor-service:8002
     routes:

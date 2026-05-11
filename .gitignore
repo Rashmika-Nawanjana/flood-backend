@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .venv/
 .env
-# Do not commit staging env file
+# Do not commit staging env files
 .env.stg
+.env.stg.bak
 .pytest_cache/

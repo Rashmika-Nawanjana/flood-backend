@@ -150,10 +150,10 @@ services:
     environment:
       KONG_ROLE: data_plane
       KONG_DATABASE: "off"
-      KONG_CLUSTER_CONTROL_PLANE: in.api.konghq.com:443
-      KONG_CLUSTER_TELEMETRY_ENDPOINT: in.telemetry.konghq.com:443
-      KONG_CLUSTER_SERVER_NAME: in.api.konghq.com
-      KONG_CLUSTER_TELEMETRY_SERVER_NAME: in.telemetry.konghq.com
+      KONG_CLUSTER_CONTROL_PLANE: 8d430d5b3f.us.cp.konghq.com:443
+      KONG_CLUSTER_TELEMETRY_ENDPOINT: 8d430d5b3f.us.tp.konghq.com:443
+      KONG_CLUSTER_SERVER_NAME: 8d430d5b3f.us.cp.konghq.com
+      KONG_CLUSTER_TELEMETRY_SERVER_NAME: 8d430d5b3f.us.tp.konghq.com
       KONG_CLUSTER_CERT: /etc/kong/certs/tls.crt
       KONG_CLUSTER_CERT_KEY: /etc/kong/certs/tls.key
       KONG_CLUSTER_MTLS_ENABLED: "on"

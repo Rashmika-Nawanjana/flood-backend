@@ -361,6 +361,7 @@ def list_anomalies(
     return {"status": "success", "count": len(items), "data": items}
 
 
+@router.get("/zones/{zone_id}/anomalies")
 @router.get("/anomalies/{zone_id}")
 def list_zone_anomalies(
     zone_id: str,

@@ -62,26 +62,41 @@ def create_producer():
 producer = None
 
 
-def validate_payload(payload: dict) -> bool:
-    """Validate the new MQTT telemetry payload shape."""
-    required_fields = [
-        "device_id",
-        "timestamp",
-        "temperature",
-        "pressure",
-        "water_level_cm",
-        "rainfall_intensity_mmh",
-        "flow_velocity_ms",
-        "device_status",
-    ]
-    if not all(field in payload for field in required_fields):
-        return False
+def normalize_payload(raw: dict) -> dict | None:
+    """Map a raw sensor payload to the canonical schema downstream services expect.
 
-    device_status = payload.get("device_status")
-    if not isinstance(device_status, dict):
-        return False
+    Supports two shapes:
+    - Canonical: already has temperature/pressure/water_level_cm/... → passed through.
+    - ESP32 legacy: temp_c/pressure_hpa/distance_cm/rssi_dbm/timestamp_ms (boot uptime)
+      → mapped to canonical fields; missing fields (rainfall, flow_velocity, battery) default to 0.
+    Returns None if device_id is missing.
+    """
+    if "device_id" not in raw:
+        return None
 
-    return all(key in device_status for key in ["battery_voltage", "signal_strength_dbm"])
+    canonical_keys = {"temperature", "pressure", "water_level_cm"}
+    if canonical_keys.issubset(raw.keys()) and isinstance(raw.get("device_status"), dict):
+        return raw
+
+    ts = raw.get("timestamp")
+    if ts is None:
+        ts_ms = raw.get("timestamp_ms")
+        # Sensor sends milliseconds-since-boot, not wall-clock. Use server time as ground truth.
+        ts = int(time.time() * 1000) if ts_ms is not None and ts_ms < 10**12 else (ts_ms or int(time.time() * 1000))
+
+    return {
+        "device_id": raw["device_id"],
+        "timestamp": ts,
+        "temperature": float(raw.get("temperature", raw.get("temp_c", 0.0))),
+        "pressure": float(raw.get("pressure", raw.get("pressure_hpa", 0.0))),
+        "water_level_cm": float(raw.get("water_level_cm", raw.get("distance_cm", 0.0))),
+        "rainfall_intensity_mmh": float(raw.get("rainfall_intensity_mmh", 0.0)),
+        "flow_velocity_ms": float(raw.get("flow_velocity_ms", 0.0)),
+        "device_status": {
+            "battery_voltage": float(raw.get("battery_voltage", 0.0)),
+            "signal_strength_dbm": float(raw.get("signal_strength_dbm", raw.get("rssi_dbm", 0.0))),
+        },
+    }
 
 class MQTTClientManager:
     def __init__(self):
@@ -110,19 +125,17 @@ class MQTTClientManager:
     def on_message(self, client, userdata, msg):
         global producer
         try:
-            payload = json.loads(msg.payload.decode())
-            
-            # Validate required fields
-            if not validate_payload(payload):
-                logger.warning(f"Skipped invalid message - missing fields: {payload}")
+            raw = json.loads(msg.payload.decode())
+            payload = normalize_payload(raw)
+            if payload is None:
+                logger.warning(f"Skipped message - no device_id: {raw}")
                 return
-            
+
             with self.lock:
                 if producer is None:
                     logger.error("Producer not ready, dropping message")
                     return
-                future = producer.send(KAFKA_TOPIC, value=payload)
-                # Non-blocking: don't wait for send confirmation
+                producer.send(KAFKA_TOPIC, value=payload)
                 logger.info(
                     f"[MQTT→Kafka] {payload['device_id']} | Water: {payload['water_level_cm']}cm | "
                     f"Temp: {payload['temperature']}°C | Rain: {payload['rainfall_intensity_mmh']}mm/h"

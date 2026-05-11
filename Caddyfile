@@ -18,5 +18,5 @@
 	}
 
 	# All other traffic routes through Kong (REST API, auth, rate limiting)
-	reverse_proxy kong:80
+	reverse_proxy kong:8000
 }

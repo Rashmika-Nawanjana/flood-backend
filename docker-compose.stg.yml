@@ -145,7 +145,7 @@ services:
           memory: 512M
 
   kong:
-    image: kong:3.4
+    image: kong:3.9
     container_name: flood-kong-stg
     depends_on:
       - api
@@ -155,6 +155,7 @@ services:
     environment:
       KONG_DATABASE: "off"
       KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/api-gateway-spec.yaml
+      KONG_ROUTER_FLAVOR: expressions
       KONG_PROXY_ACCESS_LOG: /dev/stdout
       KONG_PROXY_ERROR_LOG: /dev/stderr
       KONG_ADMIN_ACCESS_LOG: /dev/stdout

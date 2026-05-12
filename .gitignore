@@ -5,4 +5,7 @@ __pycache__/
 # Do not commit staging env files
 .env.stg
 .env.stg.bak
+.env.stg.correct
+
+certs/
 .pytest_cache/

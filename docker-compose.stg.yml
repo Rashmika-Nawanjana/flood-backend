@@ -330,20 +330,6 @@ services:
           cpus: "0.25"
           memory: 256M
 
-  sensor-simulator:
-    build: ./sensor-simulator
-    container_name: flood-sensor-simulator-stg
-    environment:
-      MQTT_BROKER: ${MQTT_BROKER}
-      MQTT_PORT: ${MQTT_PORT}
-      PUBLISH_INTERVAL_SEC: "30"
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: "0.1"
-          memory: 64M
-
   kafka-influx-service:
     build: ./kafka-influx-service
     container_name: flood-kafka-influx-bridge-stg

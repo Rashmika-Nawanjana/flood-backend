@@ -363,10 +363,6 @@ def list_zone_predictions(
                 {"factor": "Predicted Peak Water Level", "value": f"{summary.get('predicted_peak_level_m')}m", "impact": "High"}
             ],
         }
-
-    return {"status": "success", "count": len(alerts), "data": alerts}
-
-
         results.append(item)
 
     if severity:

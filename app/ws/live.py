@@ -74,7 +74,7 @@ async def _lookup_zone(sensor_id: str) -> str | None:
                 with psycopg.connect(DATABASE_URL) as conn:
                     with conn.cursor() as cur:
                         cur.execute(
-                            "SELECT zone_id FROM sensors WHERE sensor_id = %s LIMIT 1",
+                            "SELECT zone_id FROM sensor_nodes WHERE sensor_id = %s LIMIT 1",
                             (sensor_id,),
                         )
                         row = cur.fetchone()

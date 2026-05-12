@@ -41,8 +41,9 @@ def get_current_user(
         )
 
         # Clerk stores custom role in publicMetadata
-        public_metadata = payload.get("public_metadata") or {}
-        role = public_metadata.get("role", "citizen")
+        public_metadata = payload.get("public_metadata") or payload.get("publicMetadata") or {}
+        raw_role = public_metadata.get("role") or payload.get("role", "citizen")
+        role = str(raw_role).lower()
 
         return {
             "user_id": payload.get("sub"),

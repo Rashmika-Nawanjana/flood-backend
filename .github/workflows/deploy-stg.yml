@@ -289,7 +289,7 @@ jobs:
               echo "" >> .env.stg
               echo "MQTT_BROKER=broker.hivemq.com" >> .env.stg
               echo "MQTT_PORT=1883" >> .env.stg
-              echo "MQTT_TOPIC=flood/sensors/#" >> .env.stg
+              echo "MQTT_TOPIC=flood/a1/#" >> .env.stg
               echo "MQTT_USERNAME=" >> .env.stg
               echo "MQTT_PASSWORD=" >> .env.stg
               echo "" >> .env.stg
@@ -326,20 +326,17 @@ jobs:
               fi
             fi
             
-            # Stop existing services
-            echo "🛑 Stopping existing services..."
-            docker compose --env-file .env.stg -f docker-compose.stg.yml down || true
-            
-            # Prune unused images only — never prune volumes (would wipe Postgres data)
-            echo "🧹 Cleaning up unused Docker images..."
-            docker image prune -f --filter "until=72h"
-            
-            # Start services
-            echo "🐳 Starting Docker services..."
+            # Rebuild changed images and restart only affected services.
+            # Never run `down` here — that stops Postgres/InfluxDB and risks data loss.
+            echo "🐳 Building and restarting services..."
             docker compose \
               --env-file .env.stg \
               -f docker-compose.stg.yml \
-              up -d
+              up -d --build
+
+            # Prune unused images only — never prune volumes (would wipe Postgres/InfluxDB data)
+            echo "🧹 Cleaning up unused Docker images..."
+            docker image prune -f --filter "until=72h"
             
             # Wait for services to be healthy
             echo "⏳ Waiting for services to be healthy..."

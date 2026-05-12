@@ -1,0 +1,89 @@
+groups:
+  - name: floodsense_service_health
+    interval: 30s
+    rules:
+      # Service is completely down (no scrapes for 2m)
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} has been unreachable for more than 2 minutes."
+
+      # High HTTP error rate (>5% 5xx over 5m)
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum by (service) (rate(http_requests_total{status_code=~"5.."}[5m]))
+            /
+            sum by (service) (rate(http_requests_total[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate on {{ $labels.service }}"
+          description: "{{ $labels.service }} error rate is {{ $value | humanizePercentage }} over the last 5 minutes."
+
+      # Slow response times (p95 > 2s)
+      - alert: SlowResponseTime
+        expr: |
+          histogram_quantile(0.95,
+            sum by (service, le) (rate(http_request_duration_seconds_bucket[5m]))
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow p95 latency on {{ $labels.service }}"
+          description: "{{ $labels.service }} p95 latency is {{ $value | humanizeDuration }}."
+
+  - name: floodsense_pipeline
+    interval: 30s
+    rules:
+      # MQTT bridge disconnected for >2m
+      - alert: MQTTBridgeDisconnected
+        expr: mqtt_connected == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MQTT bridge is disconnected"
+          description: "The MQTT→Kafka bridge has been disconnected from the broker for more than 2 minutes. No sensor data is being ingested."
+
+      # No messages arriving from MQTT (may indicate sensor silence or broker issue)
+      - alert: NoMQTTMessages
+        expr: rate(mqtt_messages_received_total[10m]) == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No MQTT messages received in 10 minutes"
+          description: "The MQTT→Kafka bridge has received 0 messages in the last 10 minutes."
+
+      # High anomaly rate (>20% of messages are anomalies)
+      - alert: HighAnomalyRate
+        expr: |
+          (
+            rate(kafka_influx_anomalies_detected_total[10m])
+            /
+            rate(kafka_influx_messages_consumed_total[10m])
+          ) > 0.20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High sensor anomaly rate"
+          description: "More than 20% of sensor readings are being flagged as anomalies. Possible sensor malfunction."
+
+      # InfluxDB write failures
+      - alert: InfluxWriteErrors
+        expr: rate(kafka_influx_write_errors_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "InfluxDB write errors detected"
+          description: "The Kafka→InfluxDB bridge is failing to write data. Sensor history may be incomplete."

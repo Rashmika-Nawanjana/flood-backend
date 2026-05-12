@@ -74,7 +74,7 @@ jobs:
               echo "" >> .env.stg
               echo "MQTT_BROKER=broker.hivemq.com" >> .env.stg
               echo "MQTT_PORT=1883" >> .env.stg
-              echo "MQTT_TOPIC=flood/sensors/#" >> .env.stg
+              echo "MQTT_TOPIC=flood/a1/#" >> .env.stg
               echo "MQTT_USERNAME=" >> .env.stg
               echo "MQTT_PASSWORD=" >> .env.stg
               echo "" >> .env.stg
@@ -99,8 +99,8 @@ jobs:
             case "$ACTION" in
               deploy)
                 echo "🚀 Starting deployment..."
-                git fetch origin && git pull origin stg
-                docker compose --env-file .env.stg -f docker-compose.stg.yml up -d
+                git fetch origin && git reset --hard origin/stg
+                docker compose --env-file .env.stg -f docker-compose.stg.yml up -d --build
                 sleep 30
                 echo "✅ Deployment completed"
                 ;;

@@ -250,22 +250,17 @@ def main():
             logger.info("✅ Kafka consumer connected")
             retry_count = 0
 
-            for message in consumer:
-                try:
-                    data = message.value
-                    process_message(data, write_api, detector, alert_producer, influx_client)
-                except KafkaError as e:
-                    logger.error(f"Kafka error: {e}")
-                except Exception as e:
-                    logger.error(f"Message processing error: {e}")
-
-        except Exception as e:
-            retry_count += 1
-            if retry_count > max_retries:
-                logger.error(f"❌ Fatal error after {max_retries} retries: {e}")
-                return 1
-            logger.error(f"Consumer error (retry {retry_count}/{max_retries}): {e}")
-            time.sleep(5)
+            while True:
+                records = consumer.poll(timeout_ms=1000)
+                for _, messages in records.items():
+                    for message in messages:
+                        try:
+                            data = message.value
+                            process_message(data, write_api, detector, alert_producer, influx_client)
+                        except KafkaError as e:
+                            logger.error(f"Kafka error: {e}")
+                        except Exception as e:
+                            logger.error(f"Message processing error: {e}")
 
         except NoBrokersAvailable:
             retry_count += 1

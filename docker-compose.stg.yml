@@ -145,7 +145,7 @@ services:
           memory: 512M
 
   kong:
-    image: kong/kong-gateway:3.14
+    image: kong:3.9
     container_name: flood-kong-stg
     depends_on:
       - api
@@ -153,18 +153,8 @@ services:
       - intelligence-service
       - zone-service
     environment:
-      KONG_ROLE: data_plane
       KONG_DATABASE: "off"
-      KONG_VITALS: "off"
-      KONG_KONNECT_MODE: "on"
-      KONG_CLUSTER_MTLS: pki
-      KONG_CLUSTER_CONTROL_PLANE: 392acc275c.us.cp.konghq.com:443
-      KONG_CLUSTER_SERVER_NAME: 392acc275c.us.cp.konghq.com
-      KONG_CLUSTER_TELEMETRY_ENDPOINT: 392acc275c.us.tp.konghq.com:443
-      KONG_CLUSTER_TELEMETRY_SERVER_NAME: 392acc275c.us.tp.konghq.com
-      KONG_CLUSTER_CERT: /etc/kong/certs/tls.crt
-      KONG_CLUSTER_CERT_KEY: /etc/kong/certs/tls.key
-      KONG_LUA_SSL_TRUSTED_CERTIFICATE: system
+      KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/api-gateway-spec.yaml
       KONG_ROUTER_FLAVOR: expressions
       KONG_PROXY_ACCESS_LOG: /dev/stdout
       KONG_PROXY_ERROR_LOG: /dev/stderr
@@ -178,7 +168,7 @@ services:
     ports:
       - "127.0.0.1:8001:8001"
     volumes:
-      - ./certs:/etc/kong/certs:ro
+      - ./api-gateway-spec.yaml:/usr/local/kong/declarative/api-gateway-spec.yaml:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "kong", "health"]

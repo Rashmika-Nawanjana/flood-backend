@@ -5,7 +5,7 @@ __pycache__/
 # Do not commit staging env files
 .env.stg
 .env.stg.bak
+.env.stg.correct
 
-# Kong TLS certs (generated from Konnect dashboard)
 certs/
 .pytest_cache/

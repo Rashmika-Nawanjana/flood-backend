@@ -297,7 +297,7 @@ jobs:
               echo "KAFKA_TOPIC=flood-sensor-data" >> .env.stg
               echo "KAFKA_SECURITY_PROTOCOL=PLAINTEXT" >> .env.stg
               echo "" >> .env.stg
-              echo "SENSOR_OFFLINE_MINUTES=15" >> .env.stg
+              echo "SENSOR_OFFLINE_MINUTES=5" >> .env.stg
               echo "LOG_FORMAT=json" >> .env.stg
               echo "LOG_OUTPUT=stdout" >> .env.stg
               echo "HEALTH_CHECK_INTERVAL=30" >> .env.stg

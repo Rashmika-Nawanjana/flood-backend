@@ -9,9 +9,12 @@ from schema import parse_timestamp_to_datetime
 
 logger = logging.getLogger(__name__)
 
+# psycopg3 does not accept SQLAlchemy-style driver prefixes
+_DB_URL = DATABASE_URL.replace("postgresql+psycopg://", "postgresql://", 1) if DATABASE_URL else ""
+
 
 def save_anomaly_to_db(data: dict, anomaly_type: str, severity: str, anomaly_score: float | None) -> None:
-    if not DATABASE_URL:
+    if not _DB_URL:
         logger.warning("DATABASE_URL not set; skipping anomaly persistence")
         return
 
@@ -47,7 +50,7 @@ def save_anomaly_to_db(data: dict, anomaly_type: str, severity: str, anomaly_sco
     )
 
     try:
-        with psycopg.connect(DATABASE_URL) as conn:
+        with psycopg.connect(_DB_URL) as conn:
             with conn.cursor() as cur:
                 cur.execute(insert, params)
             conn.commit()

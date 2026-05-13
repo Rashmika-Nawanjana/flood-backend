@@ -7,9 +7,17 @@ import logging
 from kafka import KafkaProducer
 from kafka.errors import NoBrokersAvailable
 import paho.mqtt.client as mqtt
+from prometheus_client import Counter, Gauge, start_http_server
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
+
+# --- Prometheus metrics ---
+MQTT_MESSAGES_RECEIVED = Counter("mqtt_messages_received_total", "MQTT messages received")
+MQTT_MESSAGES_FORWARDED = Counter("mqtt_messages_forwarded_total", "Messages forwarded to Kafka")
+MQTT_MESSAGES_DROPPED = Counter("mqtt_messages_dropped_total", "Messages dropped (invalid/no device_id)")
+MQTT_CONNECTED = Gauge("mqtt_connected", "1 if connected to MQTT broker, 0 otherwise")
+KAFKA_PRODUCER_ERRORS = Counter("kafka_producer_errors_total", "Kafka producer send errors")
 
 
 def _required_env(name: str) -> str:
@@ -121,35 +129,47 @@ class MQTTClientManager:
         if rc == 0:
             logger.info("✅ Connected to MQTT broker")
             self.connected = True
+            MQTT_CONNECTED.set(1)
             client.subscribe(MQTT_TOPIC)
             logger.info(f"📡 Subscribed to {MQTT_TOPIC}")
         else:
             logger.error(f"❌ MQTT connection failed, code {rc}")
+            MQTT_CONNECTED.set(0)
 
     def on_disconnect(self, client, userdata, rc):
         logger.warning(f"Disconnected from MQTT (code {rc}), attempting reconnect...")
         self.connected = False
+        MQTT_CONNECTED.set(0)
 
     def on_message(self, client, userdata, msg):
         global producer
+        MQTT_MESSAGES_RECEIVED.inc()
         try:
             raw = json.loads(msg.payload.decode())
             payload = normalize_payload(raw)
             if payload is None:
                 logger.warning(f"Skipped message - no device_id: {raw}")
+                MQTT_MESSAGES_DROPPED.inc()
                 return
 
             with self.lock:
                 if producer is None:
                     logger.error("Producer not ready, dropping message")
+                    MQTT_MESSAGES_DROPPED.inc()
                     return
-                producer.send(KAFKA_TOPIC, value=payload)
+                try:
+                    producer.send(KAFKA_TOPIC, value=payload)
+                    MQTT_MESSAGES_FORWARDED.inc()
+                except Exception as e:
+                    KAFKA_PRODUCER_ERRORS.inc()
+                    raise
                 logger.info(
                     f"[MQTT→Kafka] {payload['device_id']} | Water: {payload['water_level_cm']}cm | "
                     f"Temp: {payload['temperature']}°C | Rain: {payload['rainfall_intensity_mmh']}mm/h"
                 )
         except json.JSONDecodeError:
             logger.error(f"Invalid JSON from MQTT: {msg.payload}")
+            MQTT_MESSAGES_DROPPED.inc()
         except Exception as e:
             logger.error(f"Error processing MQTT message: {e}")
 
@@ -168,7 +188,11 @@ class MQTTClientManager:
 
 def main():
     global producer
-    
+
+    metrics_port = int(os.getenv("METRICS_PORT", "9101"))
+    start_http_server(metrics_port)
+    logger.info(f"📊 Prometheus metrics server started on :{metrics_port}")
+
     logger.info("=" * 60)
     logger.info("🌊 MQTT → KAFKA BRIDGE SERVICE")
     logger.info(f"   MQTT:   {MQTT_BROKER}:{MQTT_PORT}")

@@ -5,6 +5,10 @@
 {$PUBLIC_HOSTNAME} {
 	encode gzip
 
+	# Block public access to /metrics endpoints — internal scraping only
+	@metrics path /metrics
+	respond @metrics 403
+
 	# Socket.IO — long timeouts to keep idle sessions alive between sensor bursts.
 	# Routed directly to the API service; Kong does not handle WebSocket upgrades.
 	@websockets path /ws/*
@@ -15,6 +19,13 @@
 		}
 	}
 
+	# Grafana monitoring dashboard — proxied under /grafana/
+	handle /grafana/* {
+		reverse_proxy grafana:3000
+	}
+
 	# All other traffic routes through Kong (REST API, auth, rate limiting)
-	reverse_proxy kong:8000
+	handle {
+		reverse_proxy kong:8000
+	}
 }

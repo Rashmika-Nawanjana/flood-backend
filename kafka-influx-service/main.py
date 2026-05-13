@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import time
 import threading
 from datetime import datetime, timezone
@@ -7,6 +8,7 @@ from datetime import datetime, timezone
 from kafka import KafkaProducer
 from kafka.errors import KafkaError, NoBrokersAvailable
 from influxdb_client import Point
+from prometheus_client import Counter, Gauge, Histogram, start_http_server
 
 from anomaly import AnomalyDetector
 from config import ALERTS_TOPIC, INFLUXDB_ORG, INFLUXDB_URL, KAFKA_BROKER, KAFKA_TOPIC, TELEMETRY_TOPIC, DIAGNOSTICS_TOPIC, INFLUXDB_BUCKET
@@ -17,6 +19,19 @@ from schema import parse_timestamp, validate_payload
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
+
+# --- Prometheus metrics ---
+MESSAGES_CONSUMED = Counter("kafka_influx_messages_consumed_total", "Kafka messages consumed")
+MESSAGES_WRITTEN = Counter("kafka_influx_messages_written_total", "Messages written to InfluxDB")
+MESSAGES_INVALID = Counter("kafka_influx_messages_invalid_total", "Messages that failed payload validation")
+ANOMALIES_DETECTED = Counter("kafka_influx_anomalies_detected_total", "Anomalies detected and discarded")
+INFLUX_WRITE_ERRORS = Counter("kafka_influx_write_errors_total", "InfluxDB write failures")
+KAFKA_CONSUMER_RETRIES = Counter("kafka_influx_consumer_retries_total", "Kafka consumer reconnect attempts")
+PROCESSING_DURATION = Histogram(
+    "kafka_influx_processing_duration_seconds",
+    "Time to process a single Kafka message",
+    buckets=[0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0],
+)
 
 def get_sensor_trend(device_id: str, influx_client) -> str:
     """
@@ -67,17 +82,20 @@ def get_sensor_trend(device_id: str, influx_client) -> str:
 def process_message(data, write_api, detector, alert_producer, influx_client):
     """
     Process Kafka message: validate, check for anomalies, then write to InfluxDB.
-    
+
     Flow:
     1. Validate payload
     2. Check for anomalies using Z-score method
     3. If anomaly: publish alert to system.diagnostics, skip InfluxDB write
     4. If clean: write to InfluxDB and publish telemetry event with calculated trend
     """
+    MESSAGES_CONSUMED.inc()
+    _start = time.perf_counter()
     try:
         # Validate payload
         if not validate_payload(data):
             logger.warning(f"Skipped invalid payload: {data}")
+            MESSAGES_INVALID.inc()
             return False
 
         device_id = data['device_id']
@@ -88,6 +106,7 @@ def process_message(data, write_api, detector, alert_producer, influx_client):
         # Check for anomalies
         is_anomaly, z_score = detector.is_anomaly(device_id, water_level)
         if is_anomaly:
+            ANOMALIES_DETECTED.inc()
             # Publish anomaly alert
             anomaly_event = {
                 "event": "anomaly:new",
@@ -139,7 +158,12 @@ def process_message(data, write_api, detector, alert_producer, influx_client):
             .field("signal_strength_dbm", float(device_status['signal_strength_dbm'])) \
             .time(timestamp)
 
-        write_api.write(bucket=get_bucket(), record=[reading_point, status_point])
+        try:
+            write_api.write(bucket=get_bucket(), record=[reading_point, status_point])
+        except Exception as e:
+            INFLUX_WRITE_ERRORS.inc()
+            raise
+        MESSAGES_WRITTEN.inc()
         logger.info(
             f"[Kafka→InfluxDB] ✅ {device_id} | Water: {water_level}cm | Temp: {data['temperature']}°C | "
             f"Rain: {data['rainfall_intensity_mmh']}mm/h | Flow: {data['flow_velocity_ms']}m/s"
@@ -181,8 +205,14 @@ def process_message(data, write_api, detector, alert_producer, influx_client):
     except Exception as e:
         logger.error(f"Error processing message: {e}")
         return False
+    finally:
+        PROCESSING_DURATION.observe(time.perf_counter() - _start)
 
 def main():
+    metrics_port = int(os.getenv("METRICS_PORT", "9102"))
+    start_http_server(metrics_port)
+    logger.info(f"📊 Prometheus metrics server started on :{metrics_port}")
+
     logger.info("=" * 60)
     logger.info("🌊 KAFKA → INFLUXDB BRIDGE SERVICE (with Anomaly Detection)")
     logger.info(f"   Kafka:     {KAFKA_BROKER}")
@@ -264,6 +294,7 @@ def main():
 
         except NoBrokersAvailable:
             retry_count += 1
+            KAFKA_CONSUMER_RETRIES.inc()
             if retry_count > max_retries:
                 logger.error(f"❌ Kafka unavailable after {max_retries} retries")
                 return 1
@@ -271,6 +302,7 @@ def main():
             time.sleep(5)
         except Exception as e:
             retry_count += 1
+            KAFKA_CONSUMER_RETRIES.inc()
             if retry_count > max_retries:
                 logger.error(f"❌ Fatal error after {max_retries} retries: {e}")
                 return 1

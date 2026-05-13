@@ -35,6 +35,7 @@ from pipeline.predictions import (
     safe_name,
     severity_from_peak,
     summarize_zone_prediction,
+    update_zone_risk_status,
     write_predictions_to_db,
     write_prediction_return_id,
 )
@@ -302,8 +303,9 @@ def main() -> int:
                     zone_id=zone_id,
                     zone_name=zone_name,
                     df_pred=df_pred,
-                    warning_m=args.risk_warning_m,
-                    critical_m=args.risk_critical_m,
+                    database_url=args.database_url,
+                    default_warning_m=args.risk_warning_m,
+                    default_critical_m=args.risk_critical_m,
                 )
                 # persist prediction per-zone if DB enabled so alerts can reference it
                 prediction_db_id = None
@@ -320,6 +322,10 @@ def main() -> int:
                     summary=summary,
                     database_url=(args.database_url if not args.skip_db else None),
                 )
+                
+                # Update zone risk status in DB to reflect latest prediction
+                if not args.skip_db:
+                    update_zone_risk_status(args.database_url, summary)
             df_pred.insert(0, "zone_id", zone_id)
             df_pred.insert(1, "zone_name", zone_name)
             df_pred.insert(0, "river_id", info.get("river_id"))

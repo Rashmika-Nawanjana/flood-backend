@@ -65,6 +65,7 @@ jobs:
             "MQTT_BROKER"
             "MQTT_PORT"
             "MQTT_TOPIC"
+            "GRAFANA_ADMIN_PASSWORD"
           )
           
           missing_vars=()
@@ -305,6 +306,9 @@ jobs:
               echo "" >> .env.stg
               echo "PGADMIN_EMAIL=admin@floodsense.lk" >> .env.stg
               echo "PGADMIN_PASSWORD=pgadmin_stg_2026" >> .env.stg
+              echo "" >> .env.stg
+              echo "GRAFANA_ADMIN_USER=admin" >> .env.stg
+              echo "GRAFANA_ADMIN_PASSWORD=grafana_stg_2026" >> .env.stg
             fi
 
             # Append individual secrets if provided and not already present
@@ -378,7 +382,7 @@ jobs:
           script: |
             echo "🔍 Verifying deployment..."
             cd /opt/flood-backend
-            
+
             # Test Kong API Gateway
             echo "Testing Kong API Gateway..."
             if curl -s http://localhost:8001/status > /dev/null 2>&1; then
@@ -387,11 +391,36 @@ jobs:
               echo "✗ Kong API Gateway is not responding"
               exit 1
             fi
-            
+
+            # Test Prometheus
+            echo "Testing Prometheus..."
+            if curl -s http://localhost:9090/-/healthy > /dev/null 2>&1; then
+              echo "✓ Prometheus is healthy"
+            else
+              echo "⚠ Prometheus health check failed (non-fatal)"
+            fi
+
+            # Test Grafana
+            echo "Testing Grafana..."
+            if curl -s http://localhost:3001/api/health > /dev/null 2>&1; then
+              echo "✓ Grafana is healthy"
+            else
+              echo "⚠ Grafana health check failed (non-fatal)"
+            fi
+
+            # Show Prometheus scrape targets
+            echo "📊 Prometheus scrape targets:"
+            curl -s http://localhost:9090/api/v1/targets | python3 -c "
+            import sys, json
+            data = json.load(sys.stdin)
+            for t in data.get('data', {}).get('activeTargets', []):
+                print(f\"  {t['labels'].get('job', 'unknown')} → {t['health']}\")
+            " 2>/dev/null || echo "  (targets not yet ready)"
+
             # Display container logs
             echo "📋 Recent logs:"
             docker compose --env-file .env.stg -f docker-compose.stg.yml logs --tail=20
-            
+
             echo "✅ Deployment verification completed!"
 
   notify:

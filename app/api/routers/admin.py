@@ -427,10 +427,31 @@ def _lookup_alert_zone(alert_id: str) -> str | None:
     return None
 
 
+def _decrement_zone_active_alerts(zone_id: str | None) -> None:
+    if not zone_id:
+        return
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE zones
+                    SET active_alerts = GREATEST(active_alerts - 1, 0),
+                        last_updated = NOW()
+                    WHERE zone_id = %s
+                    """,
+                    (zone_id,),
+                )
+            conn.commit()
+    except Exception as exc:
+        print(f"Failed to decrement active_alerts for zone {zone_id}: {exc}")
+
+
 @router.patch("/alerts/{alert_id}")
 def resolve_alert(alert_id: str, payload: AlertResolutionPayload) -> dict:
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     zone_id = _lookup_alert_zone(alert_id)
+    _decrement_zone_active_alerts(zone_id)
     event = {
         "event": "alert:resolved",
         "timestamp": timestamp,

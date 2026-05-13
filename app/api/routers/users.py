@@ -11,6 +11,8 @@ Endpoints:
 """
 
 import logging
+import random
+import re
 from typing import Optional
 
 import httpx
@@ -127,11 +129,18 @@ def create_user(payload: UserCreatePayload) -> dict:
     first_name, last_name = _split_name(payload.full_name)
 
     # ── Step 1: Create user in Clerk ─────────────────────────────────
+    # Derive a username from the email local-part, keeping only alphanumeric
+    # chars and underscores (Clerk's allowed set), then append 4 random digits
+    # to avoid collisions.
+    base_username = re.sub(r"[^a-zA-Z0-9_]", "_", payload.email.split("@")[0])
+    username = f"{base_username}_{random.randint(1000, 9999)}"
+
     clerk_body = {
         "first_name": first_name,
         "last_name": last_name,
         "email_address": [payload.email],
         "password": payload.password,
+        "username": username,
         "public_metadata": {
             "role": payload.role,
             "zone_id": payload.zone_id,

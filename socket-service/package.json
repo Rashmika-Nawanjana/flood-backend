@@ -1,0 +1,23 @@
+{
+  "name": "flood-socket-service",
+  "version": "1.0.0",
+  "description": "FloodSense LK — Real-Time Socket.IO Server with namespace-based access control",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node tests/integration.test.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "jose": "^6.0.11",
+    "socket.io": "^4.8.1",
+    "ws": "^8.18.1"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

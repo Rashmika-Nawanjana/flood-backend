@@ -1,9 +1,18 @@
 _format_version: "3.0"
 
+# NOTE: key-auth was found in kong-backup.plugins.json but is intentionally
+# absent here. Admin routes authenticate via JWT Bearer tokens (validated by
+# the backend). A global key-auth plugin blocks those requests at the gateway
+# level before they reach the backend. Sync this file with deck to remove it:
+#
+#   deck gateway sync kong-plugins.yml \
+#     --konnect-control-plane-name='Flood-Management-Gateway' \
+#     --konnect-token=$KONNECT_TOKEN
+
 plugins:
   - name: rate-limiting
     config:
-      limit_by: consumer
+      limit_by: ip
       policy: local
       minute: 30
 

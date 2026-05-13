@@ -146,10 +146,14 @@ def create_user(payload: UserCreatePayload) -> dict:
         )
 
     if clerk_resp.status_code != 200:
-        detail = clerk_resp.json().get("errors", clerk_resp.text)
+        errors = clerk_resp.json().get("errors", [])
+        if errors and isinstance(errors, list):
+            detail = "; ".join(e.get("long_message") or e.get("message", "Unknown error") for e in errors)
+        else:
+            detail = clerk_resp.text
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Clerk user creation failed: {detail}",
+            detail=detail,
         )
 
     clerk_data = clerk_resp.json()
@@ -304,10 +308,14 @@ def update_user(clerk_id: str, payload: UserUpdatePayload) -> dict:
         )
 
     if clerk_resp.status_code != 200:
-        detail = clerk_resp.json().get("errors", clerk_resp.text)
+        errors = clerk_resp.json().get("errors", [])
+        if errors and isinstance(errors, list):
+            detail = "; ".join(e.get("long_message") or e.get("message", "Unknown error") for e in errors)
+        else:
+            detail = clerk_resp.text
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Clerk user update failed: {detail}",
+            detail=detail,
         )
 
     # ── Update PostgreSQL ────────────────────────────────────────────

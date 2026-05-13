@@ -51,6 +51,42 @@ def _parse_water_level_json(wlvl: dict[str, Any]) -> dict:
     }
 
 
+def _get_zone_thresholds(conn: psycopg.Connection, zone_id: str, defaults: tuple[float, float] = (3.0, 5.0)) -> tuple[float, float]:
+    """Fetch minimum warning_m and critical_m from sensor_nodes for a zone.
+    
+    Returns (warning_m, critical_m) tuple. Uses minimum across all active sensors for conservative approach.
+    """
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT MIN(warning_m) as warning_m, MIN(critical_m) as critical_m
+                FROM sensor_nodes
+                WHERE zone_id = %s AND is_active = TRUE
+                """,
+                (zone_id,),
+            )
+            row = cur.fetchone()
+            if row and row["warning_m"] is not None and row["critical_m"] is not None:
+                return (float(row["warning_m"]), float(row["critical_m"]))
+    except Exception:
+        pass
+    return defaults
+
+
+def _severity_from_peak(peak_level_m: float | None, warning_m: float, critical_m: float) -> str:
+    """Calculate severity based on predicted peak and zone thresholds."""
+    if peak_level_m is None:
+        return "UNKNOWN"
+    if peak_level_m >= critical_m:
+        return "CRITICAL"
+    if peak_level_m >= warning_m:
+        return "HIGH"
+    if peak_level_m >= warning_m * 0.75:
+        return "MEDIUM"
+    return "LOW"
+
+
 def _get_db_conn():
     dsn = os.getenv("DATABASE_URL")
     if not dsn:
@@ -81,57 +117,48 @@ def list_predictions(
             rows = list(cur.fetchall())
 
     results = []
-    for r in rows:
-        wl = r.get("water_level") or {}
-        summary = _parse_water_level_json(wl)
-        if not summary:
-            continue
+    with _get_db_conn() as conn:
+        for r in rows:
+            wl = r.get("water_level") or {}
+            summary = _parse_water_level_json(wl)
+            if not summary:
+                continue
 
-        model_version = None
-        model_id = r.get("model_id")
-        if model_id:
-            try:
-                with _get_db_conn() as conn:
+            model_version = None
+            model_id = r.get("model_id")
+            if model_id:
+                try:
                     with conn.cursor() as cur:
                         cur.execute("SELECT version FROM model_metadata WHERE model_id = %s", (model_id,))
                         meta = cur.fetchone()
                         if meta:
                             model_version = meta.get("version")
-            except Exception:
-                model_version = None
+                except Exception:
+                    model_version = None
 
-        pk = summary.get("predicted_peak_level_m")
-        severity_value = "UNKNOWN"
-        if pk is None:
-            severity_value = "UNKNOWN"
-        else:
-            if pk >= 5.0:
-                severity_value = "CRITICAL"
-            elif pk >= 4.0:
-                severity_value = "HIGH"
-            elif pk >= 2.0:
-                severity_value = "MEDIUM"
-            else:
-                severity_value = "LOW"
+            pred_zone_id = r.get("zone_id")
+            pk = summary.get("predicted_peak_level_m")
+            warning_m, critical_m = _get_zone_thresholds(conn, pred_zone_id) if pred_zone_id else (3.0, 5.0)
+            severity_value = _severity_from_peak(pk, warning_m, critical_m)
 
-        item = {
-            "prediction_id": r.get("prediction_id"),
-            "zone_id": r.get("zone_id"),
-            "zone_name": r.get("zone_name"),
-            "created_at": _to_iso(r.get("created_at")),
-            "prediction_window": {"from": wl.get("generated_at"), "to": None},
-            "flood_probability_percent": None,
-            "predicted_peak_level_m": summary.get("predicted_peak_level_m"),
-            "estimated_flood_time": summary.get("estimated_flood_time"),
-            "severity": severity_value,
-            "confidence_percent": None,
-            "model_version": model_version,
-            "top_risk_factors": [
-                {"factor": "Predicted Peak Water Level", "value": f"{summary.get('predicted_peak_level_m')}m", "impact": "High"}
-            ],
-        }
+            item = {
+                "prediction_id": r.get("prediction_id"),
+                "zone_id": r.get("zone_id"),
+                "zone_name": r.get("zone_name"),
+                "created_at": _to_iso(r.get("created_at")),
+                "prediction_window": {"from": wl.get("generated_at"), "to": None},
+                "flood_probability_percent": None,
+                "predicted_peak_level_m": summary.get("predicted_peak_level_m"),
+                "estimated_flood_time": summary.get("estimated_flood_time"),
+                "severity": severity_value,
+                "confidence_percent": None,
+                "model_version": model_version,
+                "top_risk_factors": [
+                    {"factor": "Predicted Peak Water Level", "value": f"{summary.get('predicted_peak_level_m')}m", "impact": "High"}
+                ],
+            }
 
-        results.append(item)
+            results.append(item)
 
     if severity:
         wanted = {s.strip().upper() for s in severity.split(",") if s.strip()}
@@ -174,41 +201,34 @@ def list_alerts(limit: int = Query(default=50)) -> dict:
             )
             rows = list(cur.fetchall())
 
-    alerts = []
-    for r in rows:
-        wl = r.get("water_level") or {}
-        summary = _parse_water_level_json(wl)
-        severity = "UNKNOWN"
-        pk = summary.get("predicted_peak_level_m")
-        if pk is not None:
-            if pk >= 5.0:
-                severity = "CRITICAL"
-            elif pk >= 4.0:
-                severity = "HIGH"
-            elif pk >= 2.0:
-                severity = "MEDIUM"
-            else:
-                severity = "LOW"
-        alerts.append(
-            {
-                "alert_id": r.get("alert_id"),
-                "zone_id": r.get("zone_id"),
-                "zone_name": r.get("zone_name"),
-                "source_prediction_id": r.get("prediction_id"),
-                "severity": severity,
-                "severity_code": {"LOW": 1, "MEDIUM": 2, "HIGH": 3, "CRITICAL": 4}.get(severity, 0),
-                "title": f"Automated alert ({severity}) for {r.get('zone_name')}",
-                "message": "Automated alert generated by intelligence service.",
-                "triggered_at": _to_iso(r.get("triggered_at")),
-                "triggered_by": "XGBOOST_AUTOMATED",
-                "status": "ACTIVE",
-                "resolved_at": None,
-                "affected_population": None,
-                "recommended_action": "EVACUATE" if severity == "CRITICAL" else "PREPARE",
-                "recommended_shelters": [],
-                "notifications_sent": {"push": 0, "sms": 0, "email": 0},
-            }
-        )
+        alerts = []
+        for r in rows:
+            wl = r.get("water_level") or {}
+            summary = _parse_water_level_json(wl)
+            alert_zone_id = r.get("zone_id")
+            pk = summary.get("predicted_peak_level_m")
+            warning_m, critical_m = _get_zone_thresholds(conn, alert_zone_id) if alert_zone_id else (3.0, 5.0)
+            severity = _severity_from_peak(pk, warning_m, critical_m)
+            alerts.append(
+                {
+                    "alert_id": r.get("alert_id"),
+                    "zone_id": r.get("zone_id"),
+                    "zone_name": r.get("zone_name"),
+                    "source_prediction_id": r.get("prediction_id"),
+                    "severity": severity,
+                    "severity_code": {"LOW": 1, "MEDIUM": 2, "HIGH": 3, "CRITICAL": 4}.get(severity, 0),
+                    "title": f"Automated alert ({severity}) for {r.get('zone_name')}",
+                    "message": "Automated alert generated by intelligence service.",
+                    "triggered_at": _to_iso(r.get("triggered_at")),
+                    "triggered_by": "XGBOOST_AUTOMATED",
+                    "status": "ACTIVE",
+                    "resolved_at": None,
+                    "affected_population": None,
+                    "recommended_action": "EVACUATE" if severity == "CRITICAL" else "PREPARE",
+                    "recommended_shelters": [],
+                    "notifications_sent": {"push": 0, "sms": 0, "email": 0},
+                }
+            )
 
     return {"status": "success", "count": len(alerts), "data": alerts}
 
@@ -240,17 +260,10 @@ def list_zone_alerts(
     for r in rows:
         wl = r.get("water_level") or {}
         summary = _parse_water_level_json(wl)
+        zone_id = r.get("zone_id")
         pk = summary.get("predicted_peak_level_m")
-        sev = "UNKNOWN"
-        if pk is not None:
-            if pk >= 5.0:
-                sev = "CRITICAL"
-            elif pk >= 4.0:
-                sev = "HIGH"
-            elif pk >= 2.0:
-                sev = "MEDIUM"
-            else:
-                sev = "LOW"
+        warning_m, critical_m = _get_zone_thresholds(conn, zone_id) if zone_id else (3.0, 5.0)
+        sev = _severity_from_peak(pk, warning_m, critical_m)
 
         alerts.append(
             {
@@ -314,56 +327,47 @@ def list_zone_predictions(
             rows = list(cur.fetchall())
 
     results = []
-    for r in rows:
-        wl = r.get("water_level") or {}
-        summary = _parse_water_level_json(wl)
-        if not summary:
-            continue
+    with _get_db_conn() as conn:
+        for r in rows:
+            wl = r.get("water_level") or {}
+            summary = _parse_water_level_json(wl)
+            if not summary:
+                continue
 
-        model_version = None
-        model_id = r.get("model_id")
-        if model_id:
-            try:
-                with _get_db_conn() as conn:
+            model_version = None
+            model_id = r.get("model_id")
+            if model_id:
+                try:
                     with conn.cursor() as cur:
                         cur.execute("SELECT version FROM model_metadata WHERE model_id = %s", (model_id,))
                         meta = cur.fetchone()
                         if meta:
                             model_version = meta.get("version")
-            except Exception:
-                model_version = None
+                except Exception:
+                    model_version = None
 
-        pk = summary.get("predicted_peak_level_m")
-        severity_value = "UNKNOWN"
-        if pk is None:
-            severity_value = "UNKNOWN"
-        else:
-            if pk >= 5.0:
-                severity_value = "CRITICAL"
-            elif pk >= 4.0:
-                severity_value = "HIGH"
-            elif pk >= 2.0:
-                severity_value = "MEDIUM"
-            else:
-                severity_value = "LOW"
+            pred_zone_id = r.get("zone_id")
+            pk = summary.get("predicted_peak_level_m")
+            warning_m, critical_m = _get_zone_thresholds(conn, pred_zone_id) if pred_zone_id else (3.0, 5.0)
+            severity_value = _severity_from_peak(pk, warning_m, critical_m)
 
-        item = {
-            "prediction_id": r.get("prediction_id"),
-            "zone_id": r.get("zone_id"),
-            "zone_name": r.get("zone_name"),
-            "created_at": _to_iso(r.get("created_at")),
-            "prediction_window": {"from": wl.get("generated_at"), "to": None},
-            "flood_probability_percent": None,
-            "predicted_peak_level_m": summary.get("predicted_peak_level_m"),
-            "estimated_flood_time": summary.get("estimated_flood_time"),
-            "severity": severity_value,
-            "confidence_percent": None,
-            "model_version": model_version,
-            "top_risk_factors": [
-                {"factor": "Predicted Peak Water Level", "value": f"{summary.get('predicted_peak_level_m')}m", "impact": "High"}
-            ],
-        }
-        results.append(item)
+            item = {
+                "prediction_id": r.get("prediction_id"),
+                "zone_id": r.get("zone_id"),
+                "zone_name": r.get("zone_name"),
+                "created_at": _to_iso(r.get("created_at")),
+                "prediction_window": {"from": wl.get("generated_at"), "to": None},
+                "flood_probability_percent": None,
+                "predicted_peak_level_m": summary.get("predicted_peak_level_m"),
+                "estimated_flood_time": summary.get("estimated_flood_time"),
+                "severity": severity_value,
+                "confidence_percent": None,
+                "model_version": model_version,
+                "top_risk_factors": [
+                    {"factor": "Predicted Peak Water Level", "value": f"{summary.get('predicted_peak_level_m')}m", "impact": "High"}
+                ],
+            }
+            results.append(item)
 
     if severity:
         wanted = {s.strip().upper() for s in severity.split(",") if s.strip()}

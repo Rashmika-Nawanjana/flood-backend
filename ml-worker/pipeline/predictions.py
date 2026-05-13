@@ -26,6 +26,34 @@ def safe_name(value: str) -> str:
     return "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in value)
 
 
+def get_zone_thresholds(database_url: str, zone_id: str, default_warning_m: float = 3.0, default_critical_m: float = 4.0) -> tuple[float, float]:
+    """
+    Fetch zone thresholds as the minimum of all sensor thresholds in the zone.
+    
+    Returns (warning_m, critical_m) tuple based on minimum sensor values.
+    Falls back to defaults if no sensors found or if query fails.
+    """
+    try:
+        query = """
+            SELECT 
+                MIN(warning_m) as min_warning_m,
+                MIN(critical_m) as min_critical_m
+            FROM sensor_nodes
+            WHERE zone_id = %s AND is_active = TRUE
+        """
+        with psycopg.connect(database_url, row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, (zone_id,))
+                row = cur.fetchone()
+        
+        if row and row["min_warning_m"] is not None and row["min_critical_m"] is not None:
+            return (float(row["min_warning_m"]), float(row["min_critical_m"]))
+    except Exception as e:
+        print(f"WARNING: Could not fetch zone thresholds for {zone_id}: {e}. Using defaults.")
+    
+    return (default_warning_m, default_critical_m)
+
+
 def create_kafka_producer(kafka_broker: str | None):
     if not kafka_broker:
         return None
@@ -62,9 +90,21 @@ def summarize_zone_prediction(
     zone_id: str,
     zone_name: str,
     df_pred: pd.DataFrame,
-    warning_m: float,
-    critical_m: float,
+    database_url: str,
+    default_warning_m: float = 3.0,
+    default_critical_m: float = 4.0,
 ) -> dict:
+    """
+    Summarize zone predictions using zone-specific thresholds fetched from sensor_nodes.
+    
+    Thresholds are computed as the minimum of all active sensors in the zone (conservative approach).
+    Falls back to environment defaults if sensors are not found.
+    """
+    # Fetch zone thresholds from sensor data (minimum across all sensors in zone)
+    warning_m, critical_m = get_zone_thresholds(
+        database_url, zone_id, default_warning_m, default_critical_m
+    )
+    
     latest = df_pred.iloc[-1]
     horizon_cols = [col for col in df_pred.columns if col.startswith("y_pred_t_plus_")]
     valid_horizons = []
@@ -319,3 +359,63 @@ def write_predictions_to_db(database_url: str, model_id: int, payloads: list[dic
                     (item["zone_id"], model_id, Json(item["water_level"])),
                 )
         conn.commit()
+
+
+def update_zone_risk_status(database_url: str, summary: dict) -> None:
+    """
+    Update zone risk status (risk_score, risk_level, color_code, last_updated) based on prediction summary.
+    Increment active_alerts if severity is HIGH or CRITICAL.
+    
+    Called after predictions are written to synchronize zone table with latest risk data.
+    """
+    if not database_url or not summary:
+        return
+    
+    zone_id = summary.get("zone_id")
+    severity = summary.get("severity")
+    prediction_payload = {
+        "flood_probability_percent": round(min(100.0, max(0.0, summary.get("risk_score", 0.0))), 1),
+        "predicted_peak_level_m": summary.get("predicted_peak_level_m"),
+        "estimated_flood_time": summary.get("estimated_flood_time"),
+        "confidence_percent": None,
+        "model_version": summary.get("model_version"),
+    }
+    
+    # If HIGH or CRITICAL, increment active_alerts
+    increment_alerts = 1 if severity in {"HIGH", "CRITICAL"} else 0
+    
+    update_query = """
+        UPDATE zones
+        SET 
+            risk_score = %s,
+            risk_level = %s,
+            color_code = %s,
+            prediction = %s,
+            active_alerts = CASE 
+                WHEN %s > 0 THEN active_alerts + %s
+                ELSE active_alerts
+            END,
+            last_updated = NOW()
+        WHERE zone_id = %s
+    """
+    
+    try:
+        with psycopg.connect(database_url) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    update_query,
+                    (
+                        summary.get("risk_score"),
+                        severity,
+                        summary.get("color_code"),
+                        Json(prediction_payload),
+                        increment_alerts,
+                        increment_alerts,
+                        zone_id,
+                    ),
+                )
+            conn.commit()
+            if increment_alerts > 0:
+                print(f"Zone {zone_id} alert count incremented due to {severity} prediction")
+    except Exception as e:
+        print(f"WARNING: Could not update zone risk status for {zone_id}: {e}")

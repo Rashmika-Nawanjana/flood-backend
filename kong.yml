@@ -33,6 +33,7 @@ services:
         strip_path: false
       - name: sensor-zone-anomalies-route
         expression: 'http.path ~ "^/v1/zones/[^/]+/anomalies"'
+        priority: 10
         strip_path: false
 
   - name: intelligence-service
@@ -43,6 +44,7 @@ services:
         strip_path: false
       - name: intelligence-zone-subroutes
         expression: '(http.path ~ "^/v1/zones/[^/]+/alerts") || (http.path ~ "^/v1/zones/[^/]+/predictions")'
+        priority: 10
         strip_path: false
 
   - name: zone-service

@@ -163,6 +163,11 @@ services:
       KONG_ADMIN_LISTEN: 0.0.0.0:8001
       KONG_PROXY_LISTEN: 0.0.0.0:8000
       KONG_LOG_LEVEL: notice
+      # Re-resolve Docker container IPs immediately after they change.
+      # Without this Kong caches stale IPs when containers are recreated
+      # and returns 502 until Kong itself is restarted.
+      KONG_DNS_STALE_TTL: "0"
+      KONG_UPSTREAM_KEEPALIVE_IDLE_TIMEOUT: "60"
     expose:
       - "8000"
     ports:

@@ -33,15 +33,16 @@ class AnomalyDetector:
             f"std={std_dev:.2f}, z-score={z_score:.2f}"
         )
 
-        if z_score > self.z_threshold:
+        is_anomalous = z_score > self.z_threshold
+        if is_anomalous:
             logger.warning(
                 f"🚨 ANOMALY: Sensor {sensor_id} reading {new_value}cm "
                 f"(z-score: {z_score:.2f})"
             )
-            return True, z_score
 
+        # Always update history
         history.append(new_value)
         if len(history) > self.history_size:
             history.pop(0)
 
-        return False, z_score
+        return is_anomalous, z_score
